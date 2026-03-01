@@ -1,0 +1,16 @@
+1.create project
+    cd ~/Desktop
+    rm -rf PhotoManager
+
+    npx create-expo-app@latest PhotoManager
+    cd PhotoManager
+    npx expo install expo-media-library
+
+2. start
+    npx expo start
+3. update to phone
+    手机扫描，使用expo go打开
+
+3.安装手势库
+    cd PhotoManager
+    npx expo install react-native-gesture-handler react-native-reanimated
