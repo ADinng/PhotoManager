@@ -1,6 +1,6 @@
 import * as MediaLibrary from 'expo-media-library';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
@@ -14,6 +14,14 @@ export default function HomeScreen() {
       loadPhotos();
     }
   }, [permission]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (permission?.granted) {
+        loadPhotos();
+      }
+    }, [permission])
+  );
 
   async function loadPhotos() {
     setLoading(true);
