@@ -4,8 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 const { width: SW, height: SH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
 
@@ -27,7 +26,7 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
-      { rotate: `${rotate.value}deg` },
+    //   { rotate: `${rotate.value}deg` },
     ],
     opacity: opacity.value,
   }));
@@ -43,20 +42,28 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
   const pan = Gesture.Pan()
     .onUpdate((e) => {
       translateX.value = e.translationX;
-      rotate.value = e.translationX / 15;
+    //   rotate.value = e.translationX / 15;
     })
     .onEnd((e) => {
       if (e.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-SW * 1.5);
-        opacity.value = withSpring(0);
+        // translateX.value = withSpring(-SW * 1.5);
+        // opacity.value = withSpring(0);
+        // 左滑
+        translateX.value = withTiming(-SW * 1.5, { duration: 250 });
+        opacity.value = withTiming(0, { duration: 250 });
         runOnJS(onDelete)(asset);
       } else if (e.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(SW * 1.5);
-        opacity.value = withSpring(0);
+        // translateX.value = withSpring(SW * 1.5);
+        // opacity.value = withSpring(0);
+        // 右滑
+        translateX.value = withTiming(SW * 1.5, { duration: 250 });
+        opacity.value = withTiming(0, { duration: 250 });
         runOnJS(onKeep)(asset);
       } else {
-        translateX.value = withSpring(0);
-        rotate.value = withSpring(0);
+        //弹回
+        // translateX.value = withSpring(0);
+        // rotate.value = withSpring(0);
+        translateX.value = withSpring(0, { damping: 15 });
       }
     });
 
