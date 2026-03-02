@@ -14,3 +14,8 @@
 3.安装手势库
     cd PhotoManager
     npx expo install react-native-gesture-handler react-native-reanimated
+    npx expo start --clear
+4.图片按年月显示
+    npx expo install @react-native-async-storage/async-storage
+5.圆环显示进度条
+    npx expo install react-native-svg

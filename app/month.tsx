@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -70,7 +71,7 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
-        <Image source={{ uri }} style={styles.cardImage} resizeMode="cover" />
+        <Image source={{ uri }} style={styles.cardImage} resizeMode="contain" />
         {/* 左滑删除提示 */}
         <Animated.View style={[styles.hintBadge, styles.hintLeft, deleteHintStyle]}>
           <Text style={styles.hintText}>🗑 删除</Text>
@@ -121,6 +122,11 @@ export default function MonthScreen() {
 
     setPhotos(all);
     setLoading(false);
+
+    await AsyncStorage.setItem(
+        'reviewedMonths',
+        JSON.stringify([...JSON.parse((await AsyncStorage.getItem('reviewedMonths')) || '[]'), key])
+      );
   }
 
   function handleDelete(asset) {
@@ -150,7 +156,8 @@ export default function MonthScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← 返回</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>{label}</Text>
+        {/* <Text style={styles.header}>{label}</Text> */}
+        <Text style={styles.header}>{label}  {currentIndex + 1}/{photos.length}</Text>
         {deleted.length > 0 && (
         //   <View style={styles.trashBtn}>
         //     <Text style={styles.trashText}>🗑 {deleted.length}</Text>
@@ -192,8 +199,14 @@ export default function MonthScreen() {
           <Text style={styles.doneText}>🎉 全部处理完毕！</Text>
           <Text style={styles.doneSubText}>删除了 {deleted.length} 张</Text>
           {deleted.length > 0 && (
-            <TouchableOpacity style={styles.confirmBtn}>
-              <Text style={styles.confirmText}>确认删除</Text>
+            // <TouchableOpacity style={styles.confirmBtn}>
+            //   <Text style={styles.confirmText}>确认删除</Text>
+            // </TouchableOpacity>
+            <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
+                >
+                <Text style={styles.confirmText}>确认删除 ({deleted.length}张)</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: '#555', marginTop: 12 }]} onPress={() => router.back()}>
@@ -213,12 +226,12 @@ const styles = StyleSheet.create({
   header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
   trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   trashText: { color: 'white', fontWeight: 'bold' },
-  progress: { color: '#888', textAlign: 'center', marginBottom: 8 },
+  progress: { color: '#888', textAlign: 'center', marginBottom: 8, display: 'none' },
   cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   card: {
-    width: SW - 32, height: SH * 0.6,
-    borderRadius: 16, overflow: 'hidden',
-    backgroundColor: '#222',
+    width: SW - 80, height: SH * 0.7,
+    borderRadius: 24, overflow: 'hidden',
+    backgroundColor: '#111',
     justifyContent: 'center', alignItems: 'center',
   },
   cardImage: { width: '100%', height: '100%' },
