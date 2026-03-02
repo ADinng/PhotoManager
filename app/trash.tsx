@@ -34,7 +34,7 @@ export default function TrashScreen() {
           style: 'destructive',
           onPress: async () => {
             await MediaLibrary.deleteAssetsAsync(assets.map(a => a.id));
-            Alert.alert('完成', '已删除所有照片');
+            Alert.alert('完成', '已删除所选照片');
             router.back();
           },
         },

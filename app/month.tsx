@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -106,6 +106,16 @@ export default function MonthScreen() {
     loadMonthPhotos();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      // 每次回到这个页面，检查 pendingDelete 是否已清空
+      AsyncStorage.getItem('pendingDelete').then(val => {
+        if (!val) {
+          setDeleted([]);
+        }
+      });
+    }, [])
+  );
   async function loadMonthPhotos() {
     const [year, month] = (key as string).split('-').map(Number);
     const start = new Date(year, month - 1, 1).getTime();
