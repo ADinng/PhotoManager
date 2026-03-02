@@ -123,10 +123,9 @@ export default function MonthScreen() {
     setPhotos(all);
     setLoading(false);
 
-    await AsyncStorage.setItem(
-        'reviewedMonths',
-        JSON.stringify([...JSON.parse((await AsyncStorage.getItem('reviewedMonths')) || '[]'), key])
-      );
+    const existing = JSON.parse((await AsyncStorage.getItem('reviewedData')) || '{}');
+    existing[key as string] = all.length; // 直接记录总数，不累加
+    await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
   }
 
   function handleDelete(asset) {

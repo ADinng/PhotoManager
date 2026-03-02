@@ -3,13 +3,46 @@ import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Circle, Svg } from 'react-native-svg';
+
+// 圆环进度组件
+function RingProgress({ total, reviewed, size = 56 }: { total: number; reviewed: number; size?: number }) {
+  const percent = total === 0 ? 0 : reviewed / total;
+  const radius = (size - 8) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDash = circumference * percent;
+
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size}>
+        {/* 背景圆环 */}
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#e0e0e0" strokeWidth={5} fill="none" />
+        {/* 进度圆环 */}
+        <Circle
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke={percent === 1 ? '#34c759' : '#007AFF'}
+          strokeWidth={5} fill="none"
+          strokeDasharray={`${strokeDash} ${circumference}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      {/* 中间文字 */}
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: percent === 1 ? '#34c759' : '#007AFF' }}>
+          {Math.round(percent * 100)}%
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const [grouped, setGrouped] = useState({});
   const [loading, setLoading] = useState(false);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
-  const [reviewedMonths, setReviewedMonths] = useState<string[]>([]); // 已整理过的月份
+  const [reviewedData, setReviewedData] = useState<Record<string, number>>({}); // key -> 已整理数量
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -23,14 +56,14 @@ export default function HomeScreen() {
       if (permission?.granted && loadedRef.current) {
         refreshCounts();
       }
-      loadReviewedMonths();
+      loadReviewedData();
     }, [permission])
   );
 
-  async function loadReviewedMonths() {
+  async function loadReviewedData() {
     try {
-      const val = await AsyncStorage.getItem('reviewedMonths');
-      if (val) setReviewedMonths(JSON.parse(val));
+      const val = await AsyncStorage.getItem('reviewedData');
+      if (val) setReviewedData(JSON.parse(val));
     } catch {}
   }
 
@@ -93,7 +126,7 @@ export default function HomeScreen() {
   }
 
   // 按年分组
-  const byYear: Record<string, { key: string; month: number; count: number; label: string }[]> = {};
+  const byYear: Record<string, any[]> = {};
   Object.keys(grouped)
     .sort((a, b) => b.localeCompare(a))
     .forEach(key => {
@@ -117,16 +150,19 @@ export default function HomeScreen() {
           <Text style={styles.yearLabel}>{year} 年</Text>
           <View style={styles.monthGrid}>
             {byYear[year].map(item => {
-              const reviewed = reviewedMonths.includes(item.key);
+              const reviewed = reviewedData[item.key] || 0;
+              const total = item.count;
+              const done = reviewed >= total;
+
               return (
                 <TouchableOpacity
                   key={item.key}
-                  style={[styles.monthCard, reviewed && styles.monthCardReviewed]}
+                  style={[styles.monthCard, done && styles.monthCardDone]}
                   onPress={() => router.push({ pathname: '/month', params: { key: item.key, label: `${year}年${item.label}` } })}
                 >
-                  <Text style={[styles.monthNum, reviewed && styles.monthNumReviewed]}>{item.label}</Text>
-                  <Text style={[styles.monthCount, reviewed && styles.monthCountReviewed]}>{item.count} 张</Text>
-                  {reviewed && <Text style={styles.reviewedBadge}>✓</Text>}
+                  <RingProgress total={total} reviewed={reviewed} size={56} />
+                  <Text style={[styles.monthNum, done && styles.monthNumDone]}>{item.label}</Text>
+                  <Text style={[styles.monthCount, done && styles.monthCountDone]}>{item.count} 张</Text>
                 </TouchableOpacity>
               );
             })}
@@ -146,16 +182,15 @@ const styles = StyleSheet.create({
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   monthCard: {
     width: '30%', backgroundColor: 'white',
-    borderRadius: 14, padding: 14,
+    borderRadius: 16, padding: 12,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
-  monthCardReviewed: { backgroundColor: '#e8f5e9' },
-  monthNum: { fontSize: 18, fontWeight: '700', color: '#222' },
-  monthNumReviewed: { color: '#2e7d32' },
-  monthCount: { fontSize: 12, color: '#888', marginTop: 4 },
-  monthCountReviewed: { color: '#66bb6a' },
-  reviewedBadge: { position: 'absolute', top: 6, right: 8, fontSize: 11, color: '#2e7d32' },
+  monthCardDone: { backgroundColor: '#e8f5e9' },
+  monthNum: { fontSize: 15, fontWeight: '700', color: '#222', marginTop: 4 },
+  monthNumDone: { color: '#2e7d32' },
+  monthCount: { fontSize: 11, color: '#aaa', marginTop: 2 },
+  monthCountDone: { color: '#66bb6a' },
   title: { fontSize: 22, fontWeight: 'bold' },
   button: { backgroundColor: '#007AFF', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12 },
   buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
