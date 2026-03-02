@@ -144,7 +144,28 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <Text style={styles.header}>我的照片</Text>
+      {/* <Text style={styles.header}>我的照片</Text> */}
+      <View style={styles.topBar}>
+        <Text style={styles.header}>我的照片</Text>
+        <View style={styles.totalProgress}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>总进度</Text>
+            <Text style={styles.totalCount}>
+              {Object.values(reviewedData).reduce((a: number, b: number) => a + b, 0)} / {Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0)} 张
+            </Text>
+          </View>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, {
+              width: `${Math.min(
+                Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0) === 0 ? 0 :
+                Object.values(reviewedData).reduce((a: number, b: number) => a + b, 0) /
+                Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0) * 100
+              , 100)}%`
+            }]} />
+          </View>
+        </View>
+      </View>
+
       {years.map(year => (
         <View key={year} style={styles.yearBlock}>
           <Text style={styles.yearLabel}>{year} 年</Text>
@@ -195,4 +216,12 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#007AFF', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12 },
   buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
   loadingText: { marginTop: 12, color: '#888', fontSize: 16 },
+
+  topBar: { paddingHorizontal: 20, paddingBottom: 16 },
+  totalProgress: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginTop: 8, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  totalLabel: { fontSize: 15, fontWeight: '700', color: '#222' },
+  totalCount: { fontSize: 13, color: '#888' },
+  progressBarBg: { height: 8, backgroundColor: '#f0f0f0', borderRadius: 4, overflow: 'hidden' },
+  progressBarFill: { height: 8, backgroundColor: '#007AFF', borderRadius: 4 },
 });
