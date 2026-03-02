@@ -137,6 +137,14 @@ export default function MonthScreen() {
     setCurrentIndex(prev => prev + 1);
   }
 
+  function handleUndo() {
+    if (currentIndex === 0) return;
+    // 如果上一张在deleted里，从deleted移除
+    const prevPhoto = photos[currentIndex - 1];
+    setDeleted(prev => prev.filter(d => d.id !== prevPhoto.id));
+    setCurrentIndex(prev => prev - 1);
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -184,11 +192,14 @@ export default function MonthScreen() {
           </View>
           {/* 底部按钮 */}
           <View style={styles.btnRow}>
+            <TouchableOpacity style={[styles.btn, styles.btnUndo]} onPress={handleUndo}>
+                <Text style={styles.btnText}>↩ 返回</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={() => handleDelete(current)}>
-              <Text style={styles.btnText}>🗑 删除</Text>
+                <Text style={styles.btnText}>🗑 删除</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnKeep]} onPress={() => handleKeep(current)}>
-              <Text style={styles.btnText}>✓ 保存</Text>
+                <Text style={styles.btnText}>✓ 保存</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -251,4 +262,5 @@ const styles = StyleSheet.create({
   doneSubText: { color: '#888', fontSize: 16 },
   confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  btnUndo: { backgroundColor: '#888' },
 });
