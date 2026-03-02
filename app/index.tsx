@@ -1,8 +1,10 @@
 import * as MediaLibrary from 'expo-media-library';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [grouped, setGrouped] = useState({});
   const [loading, setLoading] = useState(false);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
@@ -31,7 +33,6 @@ export default function HomeScreen() {
       after = result.endCursor;
     }
 
-    // 按年月分组
     const groups = {};
     for (const asset of allAssets) {
       const date = new Date(asset.creationTime);
@@ -44,7 +45,6 @@ export default function HomeScreen() {
     setLoading(false);
   }
 
-  // 没有权限
   if (!permission?.granted) {
     return (
       <View style={styles.center}>
@@ -56,7 +56,6 @@ export default function HomeScreen() {
     );
   }
 
-  // 加载中
   if (loading) {
     return (
       <View style={styles.center}>
@@ -66,7 +65,6 @@ export default function HomeScreen() {
     );
   }
 
-  // 按时间排序的月份列表
   const monthList = Object.keys(grouped)
     .sort((a, b) => b.localeCompare(a))
     .map(key => {
@@ -85,7 +83,10 @@ export default function HomeScreen() {
         data={monthList}
         keyExtractor={item => item.key}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.row}>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => router.push({ pathname: '/month', params: { key: item.key, label: item.label } })}
+          >
             <Text style={styles.monthLabel}>{item.label}</Text>
             <Text style={styles.count}>{item.count} 张</Text>
           </TouchableOpacity>
