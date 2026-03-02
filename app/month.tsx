@@ -137,8 +137,14 @@ export default function MonthScreen() {
     await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
   }
 
-  function handleDelete(asset) {
-    setDeleted(prev => [...prev, asset]);
+//   function handleDelete(asset) {
+//     setDeleted(prev => [...prev, asset]);
+//     setCurrentIndex(prev => prev + 1);
+//   }
+  async function handleDelete(asset) {
+    const info = await MediaLibrary.getAssetInfoAsync(asset);
+    const uri = info.localUri || info.uri;
+    setDeleted(prev => [...prev, { id: asset.id, uri }]);
     setCurrentIndex(prev => prev + 1);
   }
 
@@ -180,7 +186,12 @@ export default function MonthScreen() {
         //   </View>
             <TouchableOpacity
             style={styles.trashBtn}
-            onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
+            // onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
+            // onPress={() => router.push({ pathname: '/trash', params: { assets: JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))) } })}
+            onPress={async () => {
+                await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))));
+                router.push('/trash');
+              }}
             >
             <Text style={styles.trashText}>🗑 {deleted.length}</Text>
             </TouchableOpacity>
@@ -223,7 +234,12 @@ export default function MonthScreen() {
             // </TouchableOpacity>
             <TouchableOpacity
                 style={styles.confirmBtn}
-                onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
+                // onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
+                // onPress={() => router.push({ pathname: '/trash', params: { assets: JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))) } })}
+                onPress={async () => {
+                    await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))));
+                    router.push('/trash');
+                  }}
                 >
                 <Text style={styles.confirmText}>确认删除 ({deleted.length}张)</Text>
             </TouchableOpacity>

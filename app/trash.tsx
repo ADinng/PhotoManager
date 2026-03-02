@@ -1,37 +1,28 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const IMG_SIZE = (Dimensions.get('window').width - 8) / 3;
 
 export default function TrashScreen() {
-  const { ids } = useLocalSearchParams();
-  const router = useRouter();
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
+//   const { assets: assetsParam } = useLocalSearchParams();
+//   const router = useRouter();
+//   const [assets, setAssets] = useState(() => JSON.parse(assetsParam as string));
+    const router = useRouter();
+    const [assets, setAssets] = useState([]);
 
-  useEffect(() => {
-    loadAssets();
-  }, []);
+    useEffect(() => {
+        AsyncStorage.getItem('pendingDelete').then(val => {
+            if (val) setAssets(JSON.parse(val));
+        });
+    }, []);
 
-  async function loadAssets() {
-    const idList = JSON.parse(ids as string);
-    const result = [];
-    for (const id of idList) {
-      const info = await MediaLibrary.getAssetInfoAsync(id);
-      result.push(info);
-    }
-    setAssets(result);
-    setLoading(false);
-  }
-
-  // 恢复单张
   function handleRestore(asset) {
     setAssets(prev => prev.filter(a => a.id !== asset.id));
   }
 
-  // 确认全部删除
   async function handleConfirmDelete() {
     Alert.alert(
       '确认删除',
@@ -48,14 +39,6 @@ export default function TrashScreen() {
           },
         },
       ]
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <Text style={{ color: 'white' }}>加载中...</Text>
-      </View>
     );
   }
 
@@ -88,11 +71,8 @@ export default function TrashScreen() {
                   ]);
                 }}
               >
-                <Image
-                  source={{ uri: item.localUri || item.uri }}
-                  style={styles.img}
-                />
-                <View style={styles.overlay} />
+                <Image source={{ uri: item.uri }} style={styles.img} />
+                {/* <View style={styles.overlay} /> */}
               </TouchableOpacity>
             )}
           />
@@ -115,7 +95,7 @@ const styles = StyleSheet.create({
   header: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   tip: { color: '#888', textAlign: 'center', fontSize: 13, marginBottom: 8 },
   img: { width: IMG_SIZE, height: IMG_SIZE, margin: 1 },
-  overlay: { position: 'absolute', top: 1, left: 1, width: IMG_SIZE, height: IMG_SIZE, backgroundColor: 'rgba(255,0,0,0.15)' },
+//   overlay: { position: 'absolute', top: 1, left: 1, width: IMG_SIZE, height: IMG_SIZE, backgroundColor: 'rgba(255,0,0,0.15)' },
   footer: { padding: 20 },
   deleteBtn: { backgroundColor: '#ff3b30', padding: 16, borderRadius: 12, alignItems: 'center' },
   deleteBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
