@@ -40,6 +40,8 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
   }));
 
   const pan = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-15, 15])
     .onUpdate((e) => {
       translateX.value = e.translationX;
     //   rotate.value = e.translationX / 15;
