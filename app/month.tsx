@@ -5,31 +5,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+
 const { width: SW, height: SH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
 
 function SwipeablePhoto({ asset, onDelete, onKeep }) {
   const [uri, setUri] = useState(null);
   const translateX = useSharedValue(0);
-  const rotate = useSharedValue(0);
   const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    translateX.value = 0;
-    rotate.value = 0;
-    opacity.value = 1;
-    MediaLibrary.getAssetInfoAsync(asset).then(info => {
-      setUri(info.localUri || info.uri);
-    });
-  }, [asset.id]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-    //   { rotate: `${rotate.value}deg` },
-    ],
-    opacity: opacity.value,
-  }));
 
   const deleteHintStyle = useAnimatedStyle(() => ({
     opacity: translateX.value < -30 ? Math.min((-translateX.value - 30) / 50, 1) : 0,
@@ -39,32 +22,35 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
     opacity: translateX.value > 30 ? Math.min((translateX.value - 30) / 50, 1) : 0,
   }));
 
+  useEffect(() => {
+    translateX.value = 0;
+    opacity.value = 1;
+    MediaLibrary.getAssetInfoAsync(asset).then(info => {
+      setUri(info.localUri || info.uri);
+    });
+  }, [asset.id]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: opacity.value,
+  }));
+
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
     .failOffsetY([-15, 15])
     .onUpdate((e) => {
       translateX.value = e.translationX;
-    //   rotate.value = e.translationX / 15;
     })
     .onEnd((e) => {
       if (e.translationX < -SWIPE_THRESHOLD) {
-        // translateX.value = withSpring(-SW * 1.5);
-        // opacity.value = withSpring(0);
-        // 左滑
         translateX.value = withTiming(-SW * 1.5, { duration: 250 });
         opacity.value = withTiming(0, { duration: 250 });
         runOnJS(onDelete)(asset);
       } else if (e.translationX > SWIPE_THRESHOLD) {
-        // translateX.value = withSpring(SW * 1.5);
-        // opacity.value = withSpring(0);
-        // 右滑
         translateX.value = withTiming(SW * 1.5, { duration: 250 });
         opacity.value = withTiming(0, { duration: 250 });
         runOnJS(onKeep)(asset);
       } else {
-        //弹回
-        // translateX.value = withSpring(0);
-        // rotate.value = withSpring(0);
         translateX.value = withSpring(0, { damping: 15 });
       }
     });
@@ -81,11 +67,9 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.card, animatedStyle]}>
         <Image source={{ uri }} style={styles.cardImage} resizeMode="contain" />
-        {/* 左滑删除提示 */}
         <Animated.View style={[styles.hintBadge, styles.hintLeft, deleteHintStyle]}>
           <Text style={styles.hintText}>🗑 删除</Text>
         </Animated.View>
-        {/* 右滑保存提示 */}
         <Animated.View style={[styles.hintBadge, styles.hintRight, keepHintStyle]}>
           <Text style={styles.hintText}>✓ 保存</Text>
         </Animated.View>
@@ -99,23 +83,28 @@ export default function MonthScreen() {
   const router = useRouter();
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [deleted, setDeleted] = useState([]);
+  const [deleted, setDeleted] = useState<{id: string, uri: string}[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('pendingDelete').then(val => {
+        if (!val) setDeleted([]);
+      });
+    }, [])
+  );
 
   useEffect(() => {
     loadMonthPhotos();
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      // 每次回到这个页面，检查 pendingDelete 是否已清空
-      AsyncStorage.getItem('pendingDelete').then(val => {
-        if (!val) {
-          setDeleted([]);
-        }
-      });
-    }, [])
-  );
+  // 每次deleted变化自动保存
+  useEffect(() => {
+    if (deleted.length > 0) {
+      AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
+    }
+  }, [deleted]);
+
   async function loadMonthPhotos() {
     const [year, month] = (key as string).split('-').map(Number);
     const start = new Date(year, month - 1, 1).getTime();
@@ -142,15 +131,12 @@ export default function MonthScreen() {
     setPhotos(all);
     setLoading(false);
 
+    // 记录进度
     const existing = JSON.parse((await AsyncStorage.getItem('reviewedData')) || '{}');
-    existing[key as string] = all.length; // 直接记录总数，不累加
+    existing[key as string] = all.length;
     await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
   }
 
-//   function handleDelete(asset) {
-//     setDeleted(prev => [...prev, asset]);
-//     setCurrentIndex(prev => prev + 1);
-//   }
   async function handleDelete(asset) {
     const info = await MediaLibrary.getAssetInfoAsync(asset);
     const uri = info.localUri || info.uri;
@@ -164,7 +150,6 @@ export default function MonthScreen() {
 
   function handleUndo() {
     if (currentIndex === 0) return;
-    // 如果上一张在deleted里，从deleted移除
     const prevPhoto = photos[currentIndex - 1];
     setDeleted(prev => prev.filter(d => d.id !== prevPhoto.id));
     setCurrentIndex(prev => prev - 1);
@@ -179,39 +164,29 @@ export default function MonthScreen() {
   }
 
   const current = photos[currentIndex];
-  const progress = `${currentIndex + 1} / ${photos.length}`;
 
   return (
     <View style={styles.container}>
-      {/* 顶部栏 */}
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← 返回</Text>
         </TouchableOpacity>
-        {/* <Text style={styles.header}>{label}</Text> */}
-        <Text style={styles.header}>{label}  {currentIndex + 1}/{photos.length}</Text>
+        <Text style={styles.header}>{label}  {Math.min(currentIndex + 1, photos.length)}/{photos.length}</Text>
         {deleted.length > 0 && (
-        //   <View style={styles.trashBtn}>
-        //     <Text style={styles.trashText}>🗑 {deleted.length}</Text>
-        //   </View>
-            <TouchableOpacity
+          <TouchableOpacity
             style={styles.trashBtn}
-            // onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
-            // onPress={() => router.push({ pathname: '/trash', params: { assets: JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))) } })}
             onPress={async () => {
-                await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))));
-                router.push('/trash');
-              }}
-            >
+              await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
+              router.push('/trash');
+            }}
+          >
             <Text style={styles.trashText}>🗑 {deleted.length}</Text>
-            </TouchableOpacity>
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* 主体 */}
       {current ? (
         <>
-          <Text style={styles.progress}>{progress}</Text>
           <View style={styles.cardArea}>
             <SwipeablePhoto
               key={current.id}
@@ -220,41 +195,37 @@ export default function MonthScreen() {
               onKeep={handleKeep}
             />
           </View>
-          {/* 底部按钮 */}
           <View style={styles.btnRow}>
             <TouchableOpacity style={[styles.btn, styles.btnUndo]} onPress={handleUndo}>
-                <Text style={styles.btnText}>↩ 返回</Text>
+              <Text style={styles.btnText}>↩ 返回</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={() => handleDelete(current)}>
-                <Text style={styles.btnText}>🗑 删除</Text>
+              <Text style={styles.btnText}>🗑 删除</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnKeep]} onPress={() => handleKeep(current)}>
-                <Text style={styles.btnText}>✓ 保存</Text>
+              <Text style={styles.btnText}>✓ 保存</Text>
             </TouchableOpacity>
           </View>
         </>
       ) : (
-        // 全部处理完了
         <View style={styles.center}>
           <Text style={styles.doneText}>🎉 全部处理完毕！</Text>
           <Text style={styles.doneSubText}>删除了 {deleted.length} 张</Text>
           {deleted.length > 0 && (
-            // <TouchableOpacity style={styles.confirmBtn}>
-            //   <Text style={styles.confirmText}>确认删除</Text>
-            // </TouchableOpacity>
             <TouchableOpacity
-                style={styles.confirmBtn}
-                // onPress={() => router.push({ pathname: '/trash', params: { ids: JSON.stringify(deleted.map(d => d.id)) } })}
-                // onPress={() => router.push({ pathname: '/trash', params: { assets: JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))) } })}
-                onPress={async () => {
-                    await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted.map(d => ({ id: d.id, uri: d.uri }))));
-                    router.push('/trash');
-                  }}
-                >
-                <Text style={styles.confirmText}>确认删除 ({deleted.length}张)</Text>
+              style={styles.confirmBtn}
+              onPress={async () => {
+                await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
+                router.push('/trash');
+              }}
+            >
+              <Text style={styles.confirmText}>确认删除 ({deleted.length}张)</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: '#555', marginTop: 12 }]} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={[styles.confirmBtn, { backgroundColor: '#555', marginTop: 12 }]}
+            onPress={() => router.back()}
+          >
             <Text style={styles.confirmText}>返回</Text>
           </TouchableOpacity>
         </View>
@@ -271,10 +242,9 @@ const styles = StyleSheet.create({
   header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
   trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   trashText: { color: 'white', fontWeight: 'bold' },
-  progress: { color: '#888', textAlign: 'center', marginBottom: 8, display: 'none' },
   cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   card: {
-    width: SW - 80, height: SH * 0.7,
+    width: SW - 64, height: SH * 0.7,
     borderRadius: 24, overflow: 'hidden',
     backgroundColor: '#111',
     justifyContent: 'center', alignItems: 'center',
@@ -292,10 +262,10 @@ const styles = StyleSheet.create({
   btn: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center' },
   btnDelete: { backgroundColor: '#ff3b30' },
   btnKeep: { backgroundColor: '#34c759' },
+  btnUndo: { backgroundColor: '#888' },
   btnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
   doneText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   doneSubText: { color: '#888', fontSize: 16 },
   confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  btnUndo: { backgroundColor: '#888' },
 });
