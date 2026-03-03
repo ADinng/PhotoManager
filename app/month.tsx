@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -85,6 +85,9 @@ export default function MonthScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [deleted, setDeleted] = useState<{id: string, uri: string}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);       
+  const cursorRef = useRef<string | null>(null);           
+  const allLoadedRef = useRef(false);    
 
   useFocusEffect(
     useCallback(() => {
@@ -105,17 +108,69 @@ export default function MonthScreen() {
     }
   }, [deleted]);
 
+  // 快用完时自动加载更多
+  useEffect(() => {
+    if (!allLoadedRef.current && photos.length - currentIndex < 10) {
+      loadMore();
+    }
+  }, [currentIndex]);
+  
+//   async function loadMonthPhotos() {
+//     const [year, month] = (key as string).split('-').map(Number);
+//     const start = new Date(year, month - 1, 1).getTime();
+//     const end = new Date(year, month, 0, 23, 59, 59).getTime();
+
+//     let all = [];
+//     let hasMore = true;
+//     let after = null;
+
+//     while (hasMore) {
+//       const result = await MediaLibrary.getAssetsAsync({
+//         mediaType: 'photo',
+//         sortBy: [['creationTime', false]],
+//         createdAfter: start,
+//         createdBefore: end,
+//         first: 100,
+//         after,
+//       });
+//       all = [...all, ...result.assets];
+//       hasMore = result.hasNextPage;
+//       after = result.endCursor;
+//     }
+
+//     setPhotos(all);
+//     setLoading(false);
+
+//     // 记录进度
+//     const existing = JSON.parse((await AsyncStorage.getItem('reviewedData')) || '{}');
+//     existing[key as string] = all.length;
+//     await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
+//   }
+
   async function loadMonthPhotos() {
     const [year, month] = (key as string).split('-').map(Number);
     const start = new Date(year, month - 1, 1).getTime();
     const end = new Date(year, month, 0, 23, 59, 59).getTime();
 
-    let all = [];
-    let hasMore = true;
-    let after = null;
+    const result = await MediaLibrary.getAssetsAsync({
+      mediaType: 'photo',
+      sortBy: [['creationTime', false]],
+      createdAfter: start,
+      createdBefore: end,
+      first: 30,
+    });
 
+    cursorRef.current = result.endCursor;
+    allLoadedRef.current = !result.hasNextPage;
+    setPhotos(result.assets);
+    setLoading(false);
+
+    // 后台统计总数
+    let count = result.assets.length;
+    let hasMore = result.hasNextPage;
+    let after = result.endCursor;
     while (hasMore) {
-      const result = await MediaLibrary.getAssetsAsync({
+      const r = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
         sortBy: [['creationTime', false]],
         createdAfter: start,
@@ -123,18 +178,35 @@ export default function MonthScreen() {
         first: 100,
         after,
       });
-      all = [...all, ...result.assets];
-      hasMore = result.hasNextPage;
-      after = result.endCursor;
+      count += r.assets.length;
+      hasMore = r.hasNextPage;
+      after = r.endCursor;
     }
+    setTotalCount(count);
 
-    setPhotos(all);
-    setLoading(false);
-
-    // 记录进度
     const existing = JSON.parse((await AsyncStorage.getItem('reviewedData')) || '{}');
-    existing[key as string] = all.length;
+    existing[key as string] = count;
     await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
+  }
+
+  async function loadMore() {
+    if (allLoadedRef.current || !cursorRef.current) return;
+    const [year, month] = (key as string).split('-').map(Number);
+    const start = new Date(year, month - 1, 1).getTime();
+    const end = new Date(year, month, 0, 23, 59, 59).getTime();
+
+    const result = await MediaLibrary.getAssetsAsync({
+      mediaType: 'photo',
+      sortBy: [['creationTime', false]],
+      createdAfter: start,
+      createdBefore: end,
+      first: 30,
+      after: cursorRef.current,
+    });
+
+    cursorRef.current = result.endCursor;
+    allLoadedRef.current = !result.hasNextPage;
+    setPhotos(prev => [...prev, ...result.assets]);
   }
 
   async function handleDelete(asset) {
@@ -171,7 +243,8 @@ export default function MonthScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← 返回</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>{label}  {Math.min(currentIndex + 1, photos.length)}/{photos.length}</Text>
+        {/* <Text style={styles.header}>{label}  {Math.min(currentIndex + 1, photos.length)}/{photos.length}</Text> */}
+        <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text>
         {deleted.length > 0 && (
           <TouchableOpacity
             style={styles.trashBtn}
