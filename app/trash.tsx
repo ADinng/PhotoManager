@@ -33,9 +33,20 @@ export default function TrashScreen() {
           text: '确认删除',
           style: 'destructive',
           onPress: async () => {
-            await MediaLibrary.deleteAssetsAsync(assets.map(a => a.id));
-            Alert.alert('完成', '已删除所选照片');
-            router.back();
+            try {
+              // 分批删除，每批20张
+              const batchSize = 20;
+              const ids = assets.map(a => a.id);
+              for (let i = 0; i < ids.length; i += batchSize) {
+                const batch = ids.slice(i, i + batchSize);
+                await MediaLibrary.deleteAssetsAsync(batch);
+              }
+              await AsyncStorage.removeItem('pendingDelete');
+              Alert.alert('完成', `已删除 ${assets.length} 张照片`);
+              router.back();
+            } catch (e) {
+              Alert.alert('错误', '删除失败，请重试');
+            }
           },
         },
       ]
