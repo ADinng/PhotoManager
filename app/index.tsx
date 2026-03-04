@@ -60,10 +60,24 @@ export default function HomeScreen() {
     }, [permission])
   );
 
+  // async function loadReviewedData() {
+  //   try {
+  //     const val = await AsyncStorage.getItem('reviewedData');
+  //     if (val) setReviewedData(JSON.parse(val));
+  //   } catch {}
+  // }
   async function loadReviewedData() {
     try {
       const val = await AsyncStorage.getItem('reviewedData');
-      if (val) setReviewedData(JSON.parse(val));
+      const data = val ? JSON.parse(val) : {};
+      
+      // 修正超过实际数量的值
+      const corrected = {};
+      for (const key of Object.keys(data)) {
+        const actual = grouped[key]?.length || 0;
+        corrected[key] = actual > 0 ? Math.min(data[key], actual) : data[key];
+      }
+      setReviewedData(corrected);
     } catch {}
   }
 
