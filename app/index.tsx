@@ -86,6 +86,19 @@ export default function HomeScreen() {
     loadedRef.current = true;
     const groups = await fetchAllGrouped();
     setGrouped(groups);
+
+    // // 清除旧的reviewedData，重新开始
+    // await AsyncStorage.removeItem('reviewedData');
+    // setReviewedData({});
+
+      // 只清除一次旧数据
+    const cleaned = await AsyncStorage.getItem('dataCleared_v1');
+    if (!cleaned) {
+      await AsyncStorage.removeItem('reviewedData');
+      setReviewedData({});
+      await AsyncStorage.setItem('dataCleared_v1', 'true');
+    }
+
     setLoading(false);
   }
 
