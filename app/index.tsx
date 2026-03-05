@@ -56,26 +56,33 @@ export default function HomeScreen() {
       if (permission?.granted && loadedRef.current) {
         refreshCounts();
       }
-      loadReviewedData();
+      // loadReviewedData();
     }, [permission])
   );
 
   // async function loadReviewedData() {
   //   try {
   //     const val = await AsyncStorage.getItem('reviewedData');
-  //     if (val) setReviewedData(JSON.parse(val));
+  //     const data = val ? JSON.parse(val) : {};
+      
+  //     // 修正超过实际数量的值
+  //     const corrected = {};
+  //     for (const key of Object.keys(data)) {
+  //       const actual = grouped[key]?.length || 0;
+  //       corrected[key] = actual > 0 ? Math.min(data[key], actual) : data[key];
+  //     }
+  //     setReviewedData(corrected);
   //   } catch {}
   // }
-  async function loadReviewedData() {
+
+  async function correctReviewedData(groups: any) {
     try {
       const val = await AsyncStorage.getItem('reviewedData');
       const data = val ? JSON.parse(val) : {};
-      
-      // 修正超过实际数量的值
       const corrected = {};
       for (const key of Object.keys(data)) {
-        const actual = grouped[key]?.length || 0;
-        corrected[key] = actual > 0 ? Math.min(data[key], actual) : data[key];
+        const actual = groups[key]?.length || 0;
+        corrected[key] = actual > 0 ? Math.min(data[key], actual) : 0;
       }
       setReviewedData(corrected);
     } catch {}
@@ -86,7 +93,7 @@ export default function HomeScreen() {
     loadedRef.current = true;
     const groups = await fetchAllGrouped();
     setGrouped(groups);
-
+    await correctReviewedData(groups);
     // // 清除旧的reviewedData，重新开始
     // await AsyncStorage.removeItem('reviewedData');
     // setReviewedData({});
@@ -105,6 +112,7 @@ export default function HomeScreen() {
   async function refreshCounts() {
     const groups = await fetchAllGrouped();
     setGrouped(groups);
+    await correctReviewedData(groups);
   }
 
   async function fetchAllGrouped() {
