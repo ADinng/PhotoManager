@@ -85,7 +85,8 @@ export default function MonthScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [deleted, setDeleted] = useState<{id: string, uri: string}[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);       
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortAsc, setSortAsc] = useState(false); // false=新到旧, true=旧到新       
   const cursorRef = useRef<string | null>(null);           
   const allLoadedRef = useRef(false);    
 
@@ -114,38 +115,17 @@ export default function MonthScreen() {
       loadMore();
     }
   }, [currentIndex]);
-  
-//   async function loadMonthPhotos() {
-//     const [year, month] = (key as string).split('-').map(Number);
-//     const start = new Date(year, month - 1, 1).getTime();
-//     const end = new Date(year, month, 0, 23, 59, 59).getTime();
 
-//     let all = [];
-//     let hasMore = true;
-//     let after = null;
+  useEffect(() => {
+    if (!loading) {
+      setPhotos([]);
+      setCurrentIndex(0);
+      cursorRef.current = null;
+      allLoadedRef.current = false;
+      loadMonthPhotos();
+    }
+  }, [sortAsc]);
 
-//     while (hasMore) {
-//       const result = await MediaLibrary.getAssetsAsync({
-//         mediaType: 'photo',
-//         sortBy: [['creationTime', false]],
-//         createdAfter: start,
-//         createdBefore: end,
-//         first: 100,
-//         after,
-//       });
-//       all = [...all, ...result.assets];
-//       hasMore = result.hasNextPage;
-//       after = result.endCursor;
-//     }
-
-//     setPhotos(all);
-//     setLoading(false);
-
-//     // 记录进度
-//     const existing = JSON.parse((await AsyncStorage.getItem('reviewedData')) || '{}');
-//     existing[key as string] = all.length;
-//     await AsyncStorage.setItem('reviewedData', JSON.stringify(existing));
-//   }
 
   async function loadMonthPhotos() {
     const [year, month] = (key as string).split('-').map(Number);
@@ -154,7 +134,8 @@ export default function MonthScreen() {
 
     const result = await MediaLibrary.getAssetsAsync({
       mediaType: 'photo',
-      sortBy: [['creationTime', false]],
+    //   sortBy: [['creationTime', false]],
+      sortBy: [['creationTime', sortAsc]],
       createdAfter: start,
       createdBefore: end,
       first: 30,
@@ -172,7 +153,8 @@ export default function MonthScreen() {
     while (hasMore) {
       const r = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        sortBy: [['creationTime', false]],
+        // sortBy: [['creationTime', false]],
+        sortBy: [['creationTime', sortAsc]],
         createdAfter: start,
         createdBefore: end,
         first: 100,
@@ -197,7 +179,8 @@ export default function MonthScreen() {
 
     const result = await MediaLibrary.getAssetsAsync({
       mediaType: 'photo',
-      sortBy: [['creationTime', false]],
+      //sortBy: [['creationTime', false]],
+      sortBy: [['creationTime', sortAsc]],
       createdAfter: start,
       createdBefore: end,
       first: 30,
@@ -243,6 +226,13 @@ export default function MonthScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← 返回</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+            style={styles.sortBtn}
+            onPress={() => setSortAsc(prev => !prev)}
+        >
+            <Text style={styles.sortText}>{sortAsc ? 'old→new' : 'new→old'}</Text>
+        </TouchableOpacity>
+
         {/* <Text style={styles.header}>{label}  {Math.min(currentIndex + 1, photos.length)}/{photos.length}</Text> */}
         <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text>
         {deleted.length > 0 && (
@@ -342,4 +332,7 @@ const styles = StyleSheet.create({
   doneSubText: { color: '#888', fontSize: 16 },
   confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+
+  sortBtn: { backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  sortText: { color: '#aaa', fontSize: 13 },
 });
