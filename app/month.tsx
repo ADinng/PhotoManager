@@ -9,7 +9,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTi
 const { width: SW, height: SH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
 
-function SwipeablePhoto({ asset, onDelete, onKeep }) {
+function SwipeablePhoto({ asset, onDelete, onKeep, onUriLoaded }) {
   const [uri, setUri] = useState(null);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(1);
@@ -26,7 +26,9 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
     translateX.value = 0;
     opacity.value = 1;
     MediaLibrary.getAssetInfoAsync(asset).then(info => {
-      setUri(info.localUri || info.uri);
+      const u = info.localUri || info.uri;
+      setUri(u);
+      onUriLoaded(asset.id, u);
     });
   }, [asset.id]);
 
@@ -45,11 +47,11 @@ function SwipeablePhoto({ asset, onDelete, onKeep }) {
       if (e.translationX < -SWIPE_THRESHOLD) {
         translateX.value = withTiming(-SW * 1.5, { duration: 250 });
         opacity.value = withTiming(0, { duration: 250 });
-        runOnJS(onDelete)(asset);
+        runOnJS(onDelete)(asset, uri);
       } else if (e.translationX > SWIPE_THRESHOLD) {
         translateX.value = withTiming(SW * 1.5, { duration: 250 });
         opacity.value = withTiming(0, { duration: 250 });
-        runOnJS(onKeep)(asset);
+        runOnJS(onKeep)(asset, uri);
       } else {
         translateX.value = withSpring(0, { damping: 15 });
       }
@@ -86,9 +88,10 @@ export default function MonthScreen() {
   const [deleted, setDeleted] = useState<{id: string, uri: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [sortAsc, setSortAsc] = useState(false); // false=新到旧, true=旧到新       
-  const cursorRef = useRef<string | null>(null);           
-  const allLoadedRef = useRef(false);    
+  const [sortAsc, setSortAsc] = useState(false);
+  const cursorRef = useRef<string | null>(null);
+  const allLoadedRef = useRef(false);
+  const uriCacheRef = useRef<Record<string, string>>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -102,14 +105,12 @@ export default function MonthScreen() {
     loadMonthPhotos();
   }, []);
 
-  // 每次deleted变化自动保存
   useEffect(() => {
     if (deleted.length > 0) {
       AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
     }
   }, [deleted]);
 
-  // 快用完时自动加载更多
   useEffect(() => {
     if (!allLoadedRef.current && photos.length - currentIndex < 10) {
       loadMore();
@@ -122,10 +123,10 @@ export default function MonthScreen() {
       setCurrentIndex(0);
       cursorRef.current = null;
       allLoadedRef.current = false;
+      uriCacheRef.current = {};
       loadMonthPhotos();
     }
   }, [sortAsc]);
-
 
   async function loadMonthPhotos() {
     const [year, month] = (key as string).split('-').map(Number);
@@ -134,7 +135,6 @@ export default function MonthScreen() {
 
     const result = await MediaLibrary.getAssetsAsync({
       mediaType: 'photo',
-    //   sortBy: [['creationTime', false]],
       sortBy: [['creationTime', sortAsc]],
       createdAfter: start,
       createdBefore: end,
@@ -146,14 +146,12 @@ export default function MonthScreen() {
     setPhotos(result.assets);
     setLoading(false);
 
-    // 后台统计总数
     let count = result.assets.length;
     let hasMore = result.hasNextPage;
     let after = result.endCursor;
     while (hasMore) {
       const r = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        // sortBy: [['creationTime', false]],
         sortBy: [['creationTime', sortAsc]],
         createdAfter: start,
         createdBefore: end,
@@ -179,7 +177,6 @@ export default function MonthScreen() {
 
     const result = await MediaLibrary.getAssetsAsync({
       mediaType: 'photo',
-      //sortBy: [['creationTime', false]],
       sortBy: [['creationTime', sortAsc]],
       createdAfter: start,
       createdBefore: end,
@@ -192,14 +189,13 @@ export default function MonthScreen() {
     setPhotos(prev => [...prev, ...result.assets]);
   }
 
-  async function handleDelete(asset) {
-    const info = await MediaLibrary.getAssetInfoAsync(asset);
-    const uri = info.localUri || info.uri;
-    setDeleted(prev => [...prev, { id: asset.id, uri }]);
+  function handleDelete(asset, uri?: string) {
+    const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
+    setDeleted(prev => [...prev, { id: asset.id, uri: finalUri }]);
     setCurrentIndex(prev => prev + 1);
   }
 
-  function handleKeep(asset) {
+  function handleKeep(asset, uri?: string) {
     setCurrentIndex(prev => prev + 1);
   }
 
@@ -227,13 +223,11 @@ export default function MonthScreen() {
           <Text style={styles.back}>← 返回</Text>
         </TouchableOpacity>
         <TouchableOpacity
-            style={styles.sortBtn}
-            onPress={() => setSortAsc(prev => !prev)}
+          style={styles.sortBtn}
+          onPress={() => setSortAsc(prev => !prev)}
         >
-            <Text style={styles.sortText}>{sortAsc ? 'old→new' : 'new→old'}</Text>
+          <Text style={styles.sortText}>{sortAsc ? '旧→新' : '新→旧'}</Text>
         </TouchableOpacity>
-
-        {/* <Text style={styles.header}>{label}  {Math.min(currentIndex + 1, photos.length)}/{photos.length}</Text> */}
         <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text>
         {deleted.length > 0 && (
           <TouchableOpacity
@@ -256,6 +250,7 @@ export default function MonthScreen() {
               asset={current}
               onDelete={handleDelete}
               onKeep={handleKeep}
+              onUriLoaded={(id, uri) => { uriCacheRef.current[id] = uri; }}
             />
           </View>
           <View style={styles.btnRow}>
@@ -297,12 +292,13 @@ export default function MonthScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111', paddingTop: 60 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   back: { color: '#007AFF', fontSize: 16 },
+  sortBtn: { backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  sortText: { color: '#aaa', fontSize: 13 },
   header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
   trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   trashText: { color: 'white', fontWeight: 'bold' },
@@ -332,7 +328,4 @@ const styles = StyleSheet.create({
   doneSubText: { color: '#888', fontSize: 16 },
   confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-
-  sortBtn: { backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  sortText: { color: '#aaa', fontSize: 13 },
 });
