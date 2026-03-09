@@ -228,23 +228,22 @@ export default function MonthScreen() {
           style={styles.sortBtn}
           onPress={() => setSortAsc(prev => !prev)}
         >
-          <Text style={styles.sortText}>{sortAsc ? 'old→new' : 'new→old'}</Text>
+          <Text style={styles.sortText}>{sortAsc ? 'Oldest' : 'Newest'}</Text>
         </TouchableOpacity>
         {/* <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text> */}
-        <TouchableOpacity onPress={() => setShowJump(true)}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowJump(true)}>
             <Text style={styles.header}>{currentIndex + 1}/{totalCount || photos.length} ✎</Text>
         </TouchableOpacity>
-        {deleted.length > 0 && (
-          <TouchableOpacity
-            style={styles.trashBtn}
+        <TouchableOpacity
+            style={[styles.trashBtn, { backgroundColor: deleted.length > 0 ? '#ff3b30' : '#333' }]}
             onPress={async () => {
-              await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
-              router.push('/trash');
+                if (deleted.length === 0) return;
+                await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
+                router.push('/trash');
             }}
-          >
+        >
             <Text style={styles.trashText}>🗑 {deleted.length}</Text>
-          </TouchableOpacity>
-        )}
+        </TouchableOpacity>
       </View>
 
       {current ? (
@@ -362,14 +361,17 @@ export default function MonthScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111', paddingTop: 60 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
-  back: { color: '#007AFF', fontSize: 16 },
-  sortBtn: { backgroundColor: '#333', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  sortText: { color: '#aaa', fontSize: 11 },
-//   header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
+  back: { color: '#007AFF', fontSize: 13 },
+  sortBtn: { backgroundColor: '#333', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+  sortText: { color: '#aaa', fontSize: 13 },
   header: { color: 'white', fontSize: 14, fontWeight: 'bold' },
-  trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  trashText: { color: 'white', fontWeight: 'bold' },
+  trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  trashText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  progress: { color: 'white', fontSize: 13, fontWeight: 'bold' },
   cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   card: {
     width: SW - 64, height: SH * 0.7,

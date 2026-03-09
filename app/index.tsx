@@ -214,7 +214,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={item.key}
                   style={[styles.monthCard, done && styles.monthCardDone]}
-                  onPress={() => router.push({ pathname: '/month', params: { key: item.key, label: `${year}年${item.label}` } })}
+                  onPress={() => router.push({ pathname: '/month', params: { key: item.key, label: `${year}/${item.label}` } })}
                 >
                   <RingProgress total={total} reviewed={reviewed} size={56} />
                   <Text style={[styles.monthNum, done && styles.monthNumDone]}>{item.label}</Text>
