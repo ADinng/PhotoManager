@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -89,6 +89,8 @@ export default function MonthScreen() {
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [sortAsc, setSortAsc] = useState(false);
+  const [showJump, setShowJump] = useState(false);
+  const [jumpInput, setJumpInput] = useState('');
   const cursorRef = useRef<string | null>(null);
   const allLoadedRef = useRef(false);
   const uriCacheRef = useRef<Record<string, string>>({});
@@ -228,7 +230,10 @@ export default function MonthScreen() {
         >
           <Text style={styles.sortText}>{sortAsc ? '旧→新' : '新→旧'}</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text>
+        {/* <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text> */}
+        <TouchableOpacity onPress={() => setShowJump(true)}>
+            <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length} ✎</Text>
+        </TouchableOpacity>
         {deleted.length > 0 && (
           <TouchableOpacity
             style={styles.trashBtn}
@@ -288,6 +293,46 @@ export default function MonthScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+        {showJump && (
+        <View style={styles.jumpOverlay}>
+            <View style={styles.jumpBox}>
+            <Text style={styles.jumpTitle}>跳转到第几张？</Text>
+            <Text style={styles.jumpSub}>共 {totalCount || photos.length} 张</Text>
+            <TextInput
+                style={styles.jumpInput}
+                keyboardType="number-pad"
+                placeholder="输入数字"
+                placeholderTextColor="#666"
+                value={jumpInput}
+                onChangeText={setJumpInput}
+                autoFocus
+            />
+            <View style={styles.jumpBtns}>
+                <TouchableOpacity
+                style={[styles.jumpBtn, { backgroundColor: '#555' }]}
+                onPress={() => { setShowJump(false); setJumpInput(''); }}
+                >
+                <Text style={styles.jumpBtnText}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                style={[styles.jumpBtn, { backgroundColor: '#007AFF' }]}
+                onPress={() => {
+                    const num = parseInt(jumpInput);
+                    const max = totalCount || photos.length;
+                    if (!isNaN(num) && num >= 1 && num <= max) {
+                    setCurrentIndex(num - 1);
+                    }
+                    setShowJump(false);
+                    setJumpInput('');
+                }}
+                >
+                <Text style={styles.jumpBtnText}>跳转</Text>
+                </TouchableOpacity>
+            </View>
+            </View>
+        </View>
+        )}
     </View>
   );
 }
@@ -328,4 +373,13 @@ const styles = StyleSheet.create({
   doneSubText: { color: '#888', fontSize: 16 },
   confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+
+  jumpOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  jumpBox: { backgroundColor: '#222', borderRadius: 16, padding: 24, width: '80%', alignItems: 'center', gap: 12 },
+  jumpTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  jumpSub: { color: '#888', fontSize: 14 },
+  jumpInput: { width: '100%', backgroundColor: '#333', color: 'white', fontSize: 24, fontWeight: 'bold', textAlign: 'center', padding: 12, borderRadius: 10 },
+  jumpBtns: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  jumpBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
+  jumpBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
