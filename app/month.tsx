@@ -222,17 +222,17 @@ export default function MonthScreen() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>← 返回</Text>
+          <Text style={styles.back}>← {label}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.sortBtn}
           onPress={() => setSortAsc(prev => !prev)}
         >
-          <Text style={styles.sortText}>{sortAsc ? '旧→新' : '新→旧'}</Text>
+          <Text style={styles.sortText}>{sortAsc ? 'old→new' : 'new→old'}</Text>
         </TouchableOpacity>
         {/* <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length}</Text> */}
         <TouchableOpacity onPress={() => setShowJump(true)}>
-            <Text style={styles.header}>{label}  {currentIndex + 1}/{totalCount || photos.length} ✎</Text>
+            <Text style={styles.header}>{currentIndex + 1}/{totalCount || photos.length} ✎</Text>
         </TouchableOpacity>
         {deleted.length > 0 && (
           <TouchableOpacity
@@ -317,15 +317,37 @@ export default function MonthScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                 style={[styles.jumpBtn, { backgroundColor: '#007AFF' }]}
-                onPress={() => {
+                onPress={async () => {
                     const num = parseInt(jumpInput);
                     const max = totalCount || photos.length;
                     if (!isNaN(num) && num >= 1 && num <= max) {
-                    setCurrentIndex(num - 1);
+                      const targetIndex = num - 1;
+                      // 如果目标位置超过已加载的照片，先加载到那个位置
+                      if (targetIndex >= photos.length) {
+                        const [year, month] = (key as string).split('-').map(Number);
+                        const start = new Date(year, month - 1, 1).getTime();
+                        const end = new Date(year, month, 0, 23, 59, 59).getTime();
+                        let all = [...photos];
+                        while (all.length <= targetIndex && !allLoadedRef.current) {
+                          const result = await MediaLibrary.getAssetsAsync({
+                            mediaType: 'photo',
+                            sortBy: [['creationTime', sortAsc]],
+                            createdAfter: start,
+                            createdBefore: end,
+                            first: 30,
+                            after: cursorRef.current,
+                          });
+                          cursorRef.current = result.endCursor;
+                          allLoadedRef.current = !result.hasNextPage;
+                          all = [...all, ...result.assets];
+                        }
+                        setPhotos(all);
+                      }
+                      setCurrentIndex(targetIndex);
                     }
                     setShowJump(false);
                     setJumpInput('');
-                }}
+                  }}
                 >
                 <Text style={styles.jumpBtnText}>跳转</Text>
                 </TouchableOpacity>
@@ -342,9 +364,10 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   back: { color: '#007AFF', fontSize: 16 },
-  sortBtn: { backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  sortText: { color: '#aaa', fontSize: 13 },
-  header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
+  sortBtn: { backgroundColor: '#333', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  sortText: { color: '#aaa', fontSize: 11 },
+//   header: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
+  header: { color: 'white', fontSize: 14, fontWeight: 'bold' },
   trashBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   trashText: { color: 'white', fontWeight: 'bold' },
   cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
