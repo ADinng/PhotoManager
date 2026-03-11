@@ -8,6 +8,7 @@ const IMG_SIZE = (Dimensions.get('window').width - 8) / 3;
 export default function FavoritesScreen() {
   const router = useRouter();
   const [favorites, setFavorites] = useState([]);
+  const [selectedUri, setSelectedUri] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('favorites').then(val => {
@@ -47,12 +48,27 @@ export default function FavoritesScreen() {
           keyExtractor={item => item.id}
           numColumns={3}
           renderItem={({ item }) => (
-            <TouchableOpacity onLongPress={() => handleRemove(item)}>
+            <TouchableOpacity onPress={() => setSelectedUri(item.uri)} onLongPress={() => handleRemove(item)} >
               <Image source={{ uri: item.uri }} style={styles.img} />
             </TouchableOpacity>
           )}
         />
       )}
+
+        {selectedUri && (
+                <TouchableOpacity
+                style={styles.fullscreenOverlay}
+                onPress={() => setSelectedUri(null)}
+                activeOpacity={1}
+                >
+                <Image
+                    source={{ uri: selectedUri }}
+                    style={styles.fullscreenImage}
+                    resizeMode="contain"
+                />
+                <Text style={styles.fullscreenHint}>点击任意处关闭</Text>
+                </TouchableOpacity>
+            )}
     </View>
   );
 }
@@ -66,4 +82,8 @@ const styles = StyleSheet.create({
   img: { width: IMG_SIZE, height: IMG_SIZE, margin: 1 },
   emptyText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   emptySubText: { color: '#888', fontSize: 14 },
+
+  fullscreenOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  fullscreenImage: { width: '100%', height: '90%' },
+  fullscreenHint: { color: '#555', fontSize: 13, marginTop: 12 },
 });
