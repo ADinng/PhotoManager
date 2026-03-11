@@ -69,3 +69,32 @@ npx expo run:ios --device
 4. Swipe left = delete, swipe right = keep; or use the bottom buttons
 5. Tap the trash icon (top right) to view pending deletions
 6. In the trash screen, long-press a photo to restore it; tap confirm to permanently delete
+
+## Roadmap
+
+### ✅ v0.1 - Core Features
+- [x] Browse photos grouped by year and month
+- [x] Swipe left to delete, swipe right to keep
+- [x] Trash screen with batch deletion and restore
+- [x] Auto-save progress to prevent data loss
+- [x] Lazy loading for large photo libraries
+- [x] Overall progress bar and ring indicators
+- [x] Jump to specific photo index
+- [x] Sort by newest / oldest
+
+### 🚧 v0.2 - Stability
+- [ ] Build development version to remove Expo Go memory limits
+- [ ] Background processing for large libraries
+- [ ] Resume from last position automatically after crash
+
+### 🔮 v0.3 - Smart Features
+- [ ] Auto-detect duplicate photos
+- [ ] Filter by photo type (screenshots, live photos, etc.)
+- [ ] Batch select mode for quick deletion
+- [ ] iCloud sync support
+
+### 🔮 v0.4 - Polish
+- [ ] Dark / light theme
+- [ ] Haptic feedback on swipe
+- [ ] Statistics page (how many deleted, space saved)
+- [ ] iPad support
