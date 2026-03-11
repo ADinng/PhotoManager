@@ -182,6 +182,12 @@ export default function HomeScreen() {
       {/* <Text style={styles.header}>我的照片</Text> */}
       <View style={styles.topBar}>
         <Text style={styles.header}>我的照片</Text>
+        <TouchableOpacity
+          style={styles.favBtn}
+          onPress={() => router.push('/favorites')}
+        >
+          <Text style={styles.favBtnText}>⭐ 收藏</Text>
+        </TouchableOpacity>
         <View style={styles.totalProgress}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>总进度</Text>
@@ -259,4 +265,7 @@ const styles = StyleSheet.create({
   totalCount: { fontSize: 13, color: '#888' },
   progressBarBg: { height: 8, backgroundColor: '#f0f0f0', borderRadius: 4, overflow: 'hidden' },
   progressBarFill: { height: 8, backgroundColor: '#007AFF', borderRadius: 4 },
+
+  favBtn: { backgroundColor: '#FFF9E6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  favBtnText: { color: '#F5A623', fontWeight: 'bold' },
 });

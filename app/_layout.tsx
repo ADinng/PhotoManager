@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="month" />
         <Stack.Screen name="trash" />
+        <Stack.Screen name="favorites" />
       </Stack>
     </GestureHandlerRootView>
   );

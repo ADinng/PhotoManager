@@ -9,9 +9,10 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTi
 const { width: SW, height: SH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
 
-function SwipeablePhoto({ asset, onDelete, onKeep, onUriLoaded }) {
+function SwipeablePhoto({ asset, onDelete, onKeep, onFavorite, onUriLoaded }) {
   const [uri, setUri] = useState(null);
   const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
   const opacity = useSharedValue(1);
 
   const deleteHintStyle = useAnimatedStyle(() => ({
@@ -22,6 +23,9 @@ function SwipeablePhoto({ asset, onDelete, onKeep, onUriLoaded }) {
     opacity: translateX.value > 30 ? Math.min((translateX.value - 30) / 50, 1) : 0,
   }));
 
+  const favoriteHintStyle = useAnimatedStyle(() => ({
+    opacity: translateY.value < -30 ? Math.min((-translateY.value - 30) / 50, 1) : 0,
+  }));
   useEffect(() => {
     translateX.value = 0;
     opacity.value = 1;
@@ -32,30 +36,44 @@ function SwipeablePhoto({ asset, onDelete, onKeep, onUriLoaded }) {
     });
   }, [asset.id]);
 
+
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
     opacity: opacity.value,
   }));
 
   const pan = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-15, 15])
-    .onUpdate((e) => {
+  .activeOffsetX([-10, 10])
+  .activeOffsetY([-10, 10])
+  .onUpdate((e) => {
+    if (Math.abs(e.translationY) > Math.abs(e.translationX)) {
+      translateY.value = e.translationY;
+    } else {
       translateX.value = e.translationX;
-    })
-    .onEnd((e) => {
-      if (e.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withTiming(-SW * 1.5, { duration: 250 });
-        opacity.value = withTiming(0, { duration: 250 });
-        runOnJS(onDelete)(asset, uri);
-      } else if (e.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withTiming(SW * 1.5, { duration: 250 });
-        opacity.value = withTiming(0, { duration: 250 });
-        runOnJS(onKeep)(asset, uri);
-      } else {
-        translateX.value = withSpring(0, { damping: 15 });
-      }
-    });
+    }
+  })
+  .onEnd((e) => {
+    if (Math.abs(e.translationY) > Math.abs(e.translationX) && e.translationY < -SWIPE_THRESHOLD) {
+      // 上滑收藏
+      translateY.value = withTiming(-SH, { duration: 250 });
+      opacity.value = withTiming(0, { duration: 250 });
+      runOnJS(onFavorite)(asset, uri);
+    } else if (e.translationX < -SWIPE_THRESHOLD) {
+      translateX.value = withTiming(-SW * 1.5, { duration: 250 });
+      opacity.value = withTiming(0, { duration: 250 });
+      runOnJS(onDelete)(asset, uri);
+    } else if (e.translationX > SWIPE_THRESHOLD) {
+      translateX.value = withTiming(SW * 1.5, { duration: 250 });
+      opacity.value = withTiming(0, { duration: 250 });
+      runOnJS(onKeep)(asset, uri);
+    } else {
+      translateX.value = withSpring(0, { damping: 15 });
+      translateY.value = withSpring(0, { damping: 15 });
+    }
+  });
 
   if (!uri) {
     return (
@@ -75,6 +93,9 @@ function SwipeablePhoto({ asset, onDelete, onKeep, onUriLoaded }) {
         <Animated.View style={[styles.hintBadge, styles.hintRight, keepHintStyle]}>
           <Text style={styles.hintText}>✓ 保存</Text>
         </Animated.View>
+        <Animated.View style={[styles.hintBadge, styles.hintTop, favoriteHintStyle]}>
+            <Text style={styles.hintText}>⭐ 收藏</Text>
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
   );
@@ -91,6 +112,7 @@ export default function MonthScreen() {
   const [sortAsc, setSortAsc] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [jumpInput, setJumpInput] = useState('');
+  const [favorited, setFavorited] = useState<{id: string, uri: string}[]>([]);
   const cursorRef = useRef<string | null>(null);
   const allLoadedRef = useRef(false);
   const uriCacheRef = useRef<Record<string, string>>({});
@@ -105,6 +127,12 @@ export default function MonthScreen() {
 
   useEffect(() => {
     loadMonthPhotos();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('favorites').then(val => {
+      if (val) setFavorited(JSON.parse(val));
+    });
   }, []);
 
   useEffect(() => {
@@ -201,6 +229,16 @@ export default function MonthScreen() {
     setCurrentIndex(prev => prev + 1);
   }
 
+  async function handleFavorite(asset, uri?: string) {
+    const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
+    const newFav = { id: asset.id, uri: finalUri };
+    setFavorited(prev => [...prev, newFav]);
+    // 保存到 AsyncStorage
+    const existing = JSON.parse((await AsyncStorage.getItem('favorites')) || '[]');
+    existing.push(newFav);
+    await AsyncStorage.setItem('favorites', JSON.stringify(existing));
+    setCurrentIndex(prev => prev + 1);
+  }
   function handleUndo() {
     if (currentIndex === 0) return;
     const prevPhoto = photos[currentIndex - 1];
@@ -254,6 +292,7 @@ export default function MonthScreen() {
               asset={current}
               onDelete={handleDelete}
               onKeep={handleKeep}
+              onFavorite={handleFavorite}
               onUriLoaded={(id, uri) => { uriCacheRef.current[id] = uri; }}
             />
           </View>
@@ -263,6 +302,9 @@ export default function MonthScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={() => handleDelete(current)}>
               <Text style={styles.btnText}>🗑 删除</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btn, styles.btnFavorite]} onPress={() => handleFavorite(current)}>
+                <Text style={styles.btnText}>⭐ 收藏</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnKeep]} onPress={() => handleKeep(current)}>
               <Text style={styles.btnText}>✓ 保存</Text>
@@ -387,10 +429,12 @@ const styles = StyleSheet.create({
   },
   hintLeft: { right: 20, borderColor: '#ff3b30', backgroundColor: 'rgba(255,59,48,0.8)' },
   hintRight: { left: 20, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.8)' },
+  hintTop: { top: 20, alignSelf: 'center', left: '35%', borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.8)' },
   hintText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   btnRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, padding: 30 },
   btn: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center' },
   btnDelete: { backgroundColor: '#ff3b30' },
+  btnFavorite: { backgroundColor: '#FFD700' },
   btnKeep: { backgroundColor: '#34c759' },
   btnUndo: { backgroundColor: '#888' },
   btnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
