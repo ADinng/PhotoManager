@@ -233,10 +233,21 @@ export default function MonthScreen() {
     const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
     const newFav = { id: asset.id, uri: finalUri };
     setFavorited(prev => [...prev, newFav]);
-    // 保存到 AsyncStorage
     const existing = JSON.parse((await AsyncStorage.getItem('favorites')) || '[]');
     existing.push(newFav);
     await AsyncStorage.setItem('favorites', JSON.stringify(existing));
+  
+    // 同步到 iOS 系统相册收藏
+    try {
+      await MediaLibrary.addAssetsToAlbumAsync(
+        [asset.id],
+        'Favorites',
+        false
+      );
+    } catch (e) {
+      console.log('同步系统收藏失败', e);
+    }
+  
     setCurrentIndex(prev => prev + 1);
   }
   function handleUndo() {
