@@ -229,14 +229,20 @@ export default function MonthScreen() {
     setCurrentIndex(prev => prev + 1);
   }
 
-  async function handleFavorite(asset, uri?: string) {
+async function handleFavorite(asset, uri?: string) {
     const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
     const newFav = { id: asset.id, uri: finalUri };
-    setFavorited(prev => [...prev, newFav]);
+    
+    // 去重
     const existing = JSON.parse((await AsyncStorage.getItem('favorites')) || '[]');
+    if (existing.some((f: any) => f.id === asset.id)) {
+        setCurrentIndex(prev => prev + 1);
+        return;
+    }
+    
+    setFavorited(prev => [...prev, newFav]);
     existing.push(newFav);
     await AsyncStorage.setItem('favorites', JSON.stringify(existing));
-  
     // 同步到 iOS 系统相册收藏
     try {
       await MediaLibrary.addAssetsToAlbumAsync(
