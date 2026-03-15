@@ -23,9 +23,10 @@ export default function TrashScreen() {
   }
 
   async function handleConfirmDelete() {
+    const total = assets.length;
     Alert.alert(
       '确认删除',
-      `将永久删除 ${assets.length} 张照片，无法恢复`,
+      `将永久删除 ${total} 张照片，无法恢复`,
       [
         { text: '取消', style: 'cancel' },
         {
@@ -35,17 +36,16 @@ export default function TrashScreen() {
             setDeleting(true);
             try {
               const ids = assets.map(a => a.id);
-              const batchSize = 10; // 每批10张，更安全
+              const batchSize = 10;
               for (let i = 0; i < ids.length; i += batchSize) {
                 const batch = ids.slice(i, i + batchSize);
                 await MediaLibrary.deleteAssetsAsync(batch);
                 setDeleteProgress(Math.min(i + batchSize, ids.length));
-                // 每批之间稍微等一下，让内存释放
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               await AsyncStorage.removeItem('pendingDelete');
               setDeleting(false);
-              Alert.alert('完成', `已删除 ${assets.length} 张照片`, [
+              Alert.alert('完成', `已删除 ${total} 张照片`, [
                 { text: '确定', onPress: () => router.back() }
               ]);
             } catch (e) {
@@ -115,9 +115,13 @@ export default function TrashScreen() {
             )}
           />
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.deleteBtn} onPress={handleConfirmDelete}>
-              <Text style={styles.deleteBtnText}>🗑 确认全部删除 ({assets.length}张)</Text>
-            </TouchableOpacity>
+          <TouchableOpacity 
+                style={[styles.deleteBtn, assets.length === 0 && { backgroundColor: '#888' }]} 
+                onPress={handleConfirmDelete}
+                disabled={assets.length === 0}
+          >
+          <Text style={styles.deleteBtnText}>🗑 确认全部删除 ({assets.length}张)</Text>
+          </TouchableOpacity>
           </View>
         </>
       )}

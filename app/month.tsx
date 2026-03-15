@@ -116,13 +116,18 @@ export default function MonthScreen() {
   const cursorRef = useRef<string | null>(null);
   const allLoadedRef = useRef(false);
   const uriCacheRef = useRef<Record<string, string>>({});
+  const [lastDeleted, setLastDeleted] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem('pendingDelete').then(val => {
-        if (!val) setDeleted([]);
+        if (!val) {
+          // trash删除完成后，记录最后删除数量再清空
+          setLastDeleted(deleted.length > 0 ? deleted.length : lastDeleted);
+          setDeleted([]);
+        }
       });
-    }, [])
+    }, [deleted])
   );
 
   useEffect(() => {
@@ -331,7 +336,9 @@ async function handleFavorite(asset, uri?: string) {
       ) : (
         <View style={styles.center}>
           <Text style={styles.doneText}>🎉 全部处理完毕！</Text>
-          <Text style={styles.doneSubText}>删除了 {deleted.length} 张</Text>
+          <Text style={styles.doneSubText}>
+            {deleted.length > 0 ? `待删除 ${deleted.length} 张` : lastDeleted > 0 ? `已删除 ${lastDeleted} 张` : ''}
+          </Text>
           {deleted.length > 0 && (
             <TouchableOpacity
               style={styles.confirmBtn}
