@@ -121,13 +121,20 @@ export default function MonthScreen() {
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem('pendingDelete').then(val => {
-        if (!val) {
-          // trash删除完成后，记录最后删除数量再清空
-          setLastDeleted(deleted.length > 0 ? deleted.length : lastDeleted);
+        if (val) {
+          // 从 trash 返回时，恢复 deleted 状态
+          const parsed = JSON.parse(val);
+          if (parsed.length === 0) {
+            setDeleted([]);
+          }
+          // 有数据就保持不变，不清空
+        } else if (deleted.length > 0) {
+          // pendingDelete 被清除说明删除完成了
+          setLastDeleted(deleted.length);
           setDeleted([]);
         }
       });
-    }, [deleted])
+    }, [deleted.length])
   );
 
   useEffect(() => {
