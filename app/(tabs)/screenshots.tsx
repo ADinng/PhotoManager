@@ -124,45 +124,45 @@ export default function ScreenshotsScreen() {
 
   async function loadScreenshots() {
     try {
-      const album = await MediaLibrary.getAlbumAsync('Screenshots');
-      if (!album) {
-        setLoading(false);
-        return;
-      }
-
       const result = await MediaLibrary.getAssetsAsync({
-        album,
         mediaType: 'photo',
         sortBy: [['creationTime', false]],
         first: 30,
       });
-
+  
+      // 过滤出截图（截图的宽高比接近手机屏幕比例）
+      const screenWidth = Dimensions.get('window').width * 3; // 考虑像素密度
+      const screenshots = result.assets.filter(asset => 
+        asset.mediaSubtypes?.includes('screenshot')
+      );
+  
       cursorRef.current = result.endCursor;
       allLoadedRef.current = !result.hasNextPage;
-      setPhotos(result.assets);
-      setTotalCount(album.assetCount);
+      setPhotos(screenshots);
+      setTotalCount(screenshots.length);
       setLoading(false);
     } catch (e) {
+      console.log('加载截图失败', e);
       setLoading(false);
     }
   }
 
   async function loadMore() {
     if (allLoadedRef.current || !cursorRef.current) return;
-    const album = await MediaLibrary.getAlbumAsync('Screenshots');
-    if (!album) return;
-
+  
     const result = await MediaLibrary.getAssetsAsync({
-      album,
       mediaType: 'photo',
       sortBy: [['creationTime', false]],
       first: 30,
       after: cursorRef.current,
     });
-
+  
     cursorRef.current = result.endCursor;
     allLoadedRef.current = !result.hasNextPage;
-    setPhotos(prev => [...prev, ...result.assets]);
+    const screenshots = result.assets.filter(asset =>
+      asset.mediaSubtypes?.includes('screenshot')
+    );
+    setPhotos(prev => [...prev, ...screenshots]);
   }
 
   function handleDelete(asset, uri?: string) {
