@@ -342,7 +342,8 @@ async function handleFavorite(asset, uri?: string) {
         </>
       ) : (
         <View style={styles.center}>
-          <Text style={styles.doneText}>🎉 全部处理完毕！</Text>
+          <Text style={styles.doneText}>
+            {lastDeleted > 0 && deleted.length === 0 ? '🎉 全部处理完毕！' : '✅ 全部选择完毕！'}
           <Text style={styles.doneSubText}>
             {deleted.length > 0 ? `待删除 ${deleted.length} 张` : lastDeleted > 0 ? `已删除 ${lastDeleted} 张` : ''}
           </Text>
