@@ -46,7 +46,13 @@ export default function TrashScreen() {
               await AsyncStorage.removeItem('pendingDelete');
               setDeleting(false);
               Alert.alert('完成', `已删除 ${total} 张照片`, [
-                { text: '确定', onPress: () => router.back() }
+                { 
+                  text: '确定',     
+                  onPress: () => {
+                    setAssets([]);
+                    router.back();
+                  } 
+                }
               ]);
             } catch (e) {
               setDeleting(false);

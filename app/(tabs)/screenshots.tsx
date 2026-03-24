@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -109,6 +109,21 @@ export default function ScreenshotsScreen() {
   const uriCacheRef = useRef<Record<string, string>>({});
 
   useEffect(() => { loadScreenshots(); }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('pendingDelete').then(val => {
+        if (!val) {
+          setDeleted([]);
+          setLastDeleted(0);
+          setCurrentIndex(0);
+        } else{
+            const parsed = JSON.parse(val);
+            if (parsed.length > 0) setDeleted(parsed)
+        }
+      });
+    }, [])
+  );
 
   useEffect(() => {
     if (deleted.length > 0) {
@@ -278,8 +293,8 @@ const styles = StyleSheet.create({
   trashBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   trashText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
   cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  card: { width: SW - 64, height: SH * 0.7, borderRadius: 24, overflow: 'hidden', backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
-  cardImage: { width: '100%', height: '100%' },
+  card: { width: SW - 64, height: SH * 0.65, borderRadius: 24, overflow: 'hidden', backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
+  cardImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   hintBadge: { position: 'absolute', top: 30, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 3 },
   hintLeft: { right: 20, borderColor: '#ff3b30', backgroundColor: 'rgba(255,59,48,0.8)' },
   hintRight: { left: 20, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.8)' },
