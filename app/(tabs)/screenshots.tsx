@@ -139,23 +139,43 @@ export default function ScreenshotsScreen() {
 
   async function loadScreenshots() {
     try {
-      const result = await MediaLibrary.getAssetsAsync({
+      let allScreenshots = [];
+      let hasMore = true;
+      let after = null;
+      
+      // 先加载第一批
+      const firstResult = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
         sortBy: [['creationTime', false]],
         first: 30,
       });
   
-      // 过滤出截图（截图的宽高比接近手机屏幕比例）
-      const screenWidth = Dimensions.get('window').width * 3; // 考虑像素密度
-      const screenshots = result.assets.filter(asset => 
+      const firstScreenshots = firstResult.assets.filter(asset =>
         asset.mediaSubtypes?.includes('screenshot')
       );
   
-      cursorRef.current = result.endCursor;
-      allLoadedRef.current = !result.hasNextPage;
-      setPhotos(screenshots);
-      setTotalCount(screenshots.length);
+      cursorRef.current = firstResult.endCursor;
+      allLoadedRef.current = !firstResult.hasNextPage;
+      setPhotos(firstScreenshots);
       setLoading(false);
+  
+      // 后台统计总数
+      let count = firstScreenshots.length;
+      hasMore = firstResult.hasNextPage;
+      after = firstResult.endCursor;
+  
+      while (hasMore) {
+        const r = await MediaLibrary.getAssetsAsync({
+          mediaType: 'photo',
+          sortBy: [['creationTime', false]],
+          first: 100,
+          after,
+        });
+        count += r.assets.filter(a => a.mediaSubtypes?.includes('screenshot')).length;
+        hasMore = r.hasNextPage;
+        after = r.endCursor;
+      }
+      setTotalCount(count);
     } catch (e) {
       console.log('加载截图失败', e);
       setLoading(false);
@@ -198,6 +218,13 @@ export default function ScreenshotsScreen() {
       await AsyncStorage.setItem('favorites', JSON.stringify(existing));
     }
     setCurrentIndex(prev => prev + 1);
+  }
+
+  function handleUndo() {
+    if (currentIndex === 0) return;
+    const prevPhoto = photos[currentIndex - 1];
+    setDeleted(prev => prev.filter(d => d.id !== prevPhoto.id));
+    setCurrentIndex(prev => prev - 1);
   }
 
   if (loading) {
@@ -249,14 +276,17 @@ export default function ScreenshotsScreen() {
             />
           </View>
           <View style={styles.btnRow}>
+            <TouchableOpacity style={[styles.btn, styles.btnUndo]} onPress={handleUndo}>
+                <Text style={styles.btnText}>↩ 返回</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={() => handleDelete(current)}>
-              <Text style={styles.btnText}>🗑 删除</Text>
+                <Text style={styles.btnText}>🗑 删除</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, { backgroundColor: '#FFD700' }]} onPress={() => handleFavorite(current)}>
-              <Text style={styles.btnText}>⭐ 收藏</Text>
+                <Text style={styles.btnText}>⭐ 收藏</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnKeep]} onPress={() => handleKeep(current)}>
-              <Text style={styles.btnText}>✓ 保存</Text>
+                <Text style={styles.btnText}>✓ 保存</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -284,30 +314,30 @@ export default function ScreenshotsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111', paddingTop: 60 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  progress: { color: 'white', fontSize: 13, fontWeight: 'bold' },
-  trashBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  trashText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
-  cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  card: { width: SW - 64, height: SH * 0.65, borderRadius: 24, overflow: 'hidden', backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
-  cardImage: { width: '100%', height: '100%', resizeMode: 'contain' },
-  hintBadge: { position: 'absolute', top: 30, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 3 },
-  hintLeft: { right: 20, borderColor: '#ff3b30', backgroundColor: 'rgba(255,59,48,0.8)' },
-  hintRight: { left: 20, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.8)' },
-  hintTop: { top: 20, alignSelf: 'center', left: '35%', borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.8)' },
-  hintText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  btnRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, padding: 20 },
-  btn: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-  btnDelete: { backgroundColor: '#ff3b30' },
-  btnKeep: { backgroundColor: '#34c759' },
-  btnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
-  doneText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  doneSubText: { color: '#888', fontSize: 16 },
-  emptyText: { color: '#888', fontSize: 16 },
-  confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
-  confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+    container: { flex: 1, backgroundColor: '#111', paddingTop: 60 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    title: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+    progress: { color: 'white', fontSize: 13, fontWeight: 'bold' },
+    trashBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    trashText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+    cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    card: { width: SW - 64, height: SH * 0.65, borderRadius: 24, overflow: 'hidden', backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
+    cardImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+    hintBadge: { position: 'absolute', top: 30, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 3 },
+    hintLeft: { right: 20, borderColor: '#ff3b30', backgroundColor: 'rgba(255,59,48,0.8)' },
+    hintRight: { left: 20, borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.8)' },
+    hintTop: { top: 20, alignSelf: 'center', left: '35%', borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.8)' },
+    hintText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+    btnRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, padding: 20 },
+    btn: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
+    btnDelete: { backgroundColor: '#ff3b30' },
+    btnKeep: { backgroundColor: '#34c759' },
+    btnUndo: { backgroundColor: '#888' },
+    btnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
+    doneSubText: { color: '#888', fontSize: 16 },
+    emptyText: { color: '#888', fontSize: 16 },
+    confirmBtn: { backgroundColor: '#ff3b30', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
+    confirmText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
