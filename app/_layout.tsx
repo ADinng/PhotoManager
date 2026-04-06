@@ -7,6 +7,8 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="month" />
+        <Stack.Screen name="on-this-day" />
+        <Stack.Screen name="random" />
         {/* <Stack.Screen name="trash" />
         <Stack.Screen name="favorites" />
         <Stack.Screen name="screenshots" /> */}

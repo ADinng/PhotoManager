@@ -1,10 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+
+import { loadFavorites, loadPendingDelete, saveFavorites, savePendingDelete, type AssetRef } from '@/lib/library-state';
+import { formatBytes } from '@/lib/stats';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
@@ -34,7 +36,7 @@ function SwipeablePhoto({ asset, onDelete, onKeep, onFavorite, onUriLoaded }) {
       setUri(u);
       onUriLoaded(asset.id, u);
     });
-  }, [asset.id]);
+  }, [asset, onUriLoaded, opacity, translateX, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
@@ -98,111 +100,109 @@ function SwipeablePhoto({ asset, onDelete, onKeep, onFavorite, onUriLoaded }) {
 
 export default function ScreenshotsScreen() {
   const router = useRouter();
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [allScreenshots, setAllScreenshots] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [deleted, setDeleted] = useState<{ id: string; uri: string }[]>([]);
+  const [deleted, setDeleted] = useState<AssetRef[]>([]);
+  const [favorites, setFavorites] = useState<AssetRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(0);
   const [lastDeleted, setLastDeleted] = useState(0);
-  const cursorRef = useRef<string | null>(null);
-  const allLoadedRef = useRef(false);
   const uriCacheRef = useRef<Record<string, string>>({});
+  const pendingDeleteReadyRef = useRef(false);
 
-  useEffect(() => { loadScreenshots(); }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      AsyncStorage.getItem('pendingDelete').then(val => {
-        if (!val) {
-          setDeleted([]);
-          setLastDeleted(0);
-          setCurrentIndex(0);
-        } else{
-            const parsed = JSON.parse(val);
-            if (parsed.length > 0) setDeleted(parsed)
-        }
-      });
-    }, [])
-  );
-
-  useEffect(() => {
-    if (deleted.length > 0) {
-      AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
-    }
-  }, [deleted]);
-
-  useEffect(() => {
-    if (!allLoadedRef.current && photos.length - currentIndex < 10) {
-      loadMore();
-    }
-  }, [currentIndex]);
-
-  async function loadScreenshots() {
+  const loadScreenshots = useCallback(async () => {
     try {
-      let allScreenshots = [];
+      let screenshots: any[] = [];
       let hasMore = true;
-      let after = null;
-      
-      // 先加载第一批
-      const firstResult = await MediaLibrary.getAssetsAsync({
-        mediaType: 'photo',
-        sortBy: [['creationTime', false]],
-        first: 30,
-      });
-  
-      const firstScreenshots = firstResult.assets.filter(asset =>
-        asset.mediaSubtypes?.includes('screenshot')
-      );
-  
-      cursorRef.current = firstResult.endCursor;
-      allLoadedRef.current = !firstResult.hasNextPage;
-      setPhotos(firstScreenshots);
-      setLoading(false);
-  
-      // 后台统计总数
-      let count = firstScreenshots.length;
-      hasMore = firstResult.hasNextPage;
-      after = firstResult.endCursor;
-  
+      let after: string | null = null;
+      let bytes = 0;
+
       while (hasMore) {
-        const r = await MediaLibrary.getAssetsAsync({
+        const result = await MediaLibrary.getAssetsAsync({
           mediaType: 'photo',
           sortBy: [['creationTime', false]],
-          first: 100,
+          first: 500,
           after,
         });
-        count += r.assets.filter(a => a.mediaSubtypes?.includes('screenshot')).length;
-        hasMore = r.hasNextPage;
-        after = r.endCursor;
+
+        const batchScreenshots = result.assets.filter(asset =>
+          asset.mediaSubtypes?.includes('screenshot')
+        );
+
+        screenshots = [...screenshots, ...batchScreenshots];
+        bytes += batchScreenshots.reduce((sum, asset) => sum + (typeof asset.fileSize === 'number' ? asset.fileSize : 0), 0);
+        hasMore = result.hasNextPage;
+        after = result.endCursor;
       }
-      setTotalCount(count);
+
+      setAllScreenshots(screenshots);
+      setTotalCount(screenshots.length);
+      setTotalBytes(bytes);
+      setLoading(false);
     } catch (e) {
       console.log('加载截图失败', e);
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void loadScreenshots();
+  }, [loadScreenshots]);
+
+  useFocusEffect(
+    useCallback(() => {
+      pendingDeleteReadyRef.current = false;
+      Promise.all([loadPendingDelete(), loadFavorites()]).then(([pendingDelete, favoriteItems]) => {
+        if (pendingDelete.length === 0 && deleted.length > 0) {
+          setLastDeleted(deleted.length);
+        }
+        setDeleted(pendingDelete);
+        setFavorites(favoriteItems);
+        pendingDeleteReadyRef.current = true;
+      });
+    }, [deleted.length])
+  );
+
+  useEffect(() => {
+    if (!pendingDeleteReadyRef.current) {
+      return;
+    }
+
+    if (deleted.length > 0) {
+      void savePendingDelete(deleted);
+    } else {
+      void savePendingDelete([]);
+    }
+  }, [deleted]);
+
+  useEffect(() => {
+    const nextPhotos = allScreenshots.filter(asset => !deleted.some(item => item.id === asset.id));
+    setPhotos(nextPhotos);
+    if (nextPhotos.length === 0) {
+      setCurrentIndex(0);
+    } else if (currentIndex >= nextPhotos.length) {
+      setCurrentIndex(nextPhotos.length - 1);
+    }
+  }, [allScreenshots, currentIndex, deleted]);
+
+  function isDeleted(assetId: string) {
+    return deleted.some(item => item.id === assetId);
   }
 
-  async function loadMore() {
-    if (allLoadedRef.current || !cursorRef.current) return;
-  
-    const result = await MediaLibrary.getAssetsAsync({
-      mediaType: 'photo',
-      sortBy: [['creationTime', false]],
-      first: 30,
-      after: cursorRef.current,
-    });
-  
-    cursorRef.current = result.endCursor;
-    allLoadedRef.current = !result.hasNextPage;
-    const screenshots = result.assets.filter(asset =>
-      asset.mediaSubtypes?.includes('screenshot')
-    );
-    setPhotos(prev => [...prev, ...screenshots]);
+  function isFavorited(assetId: string) {
+    return favorites.some(item => item.id === assetId);
+  }
+
+  function updateDeleted(nextItems: AssetRef[]) {
+    setDeleted(nextItems);
+    void savePendingDelete(nextItems);
   }
 
   function handleDelete(asset, uri?: string) {
     const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
-    setDeleted(prev => [...prev, { id: asset.id, uri: finalUri }]);
+    updateDeleted([...deleted, { id: asset.id, uri: finalUri }]);
     setCurrentIndex(prev => prev + 1);
   }
 
@@ -212,18 +212,29 @@ export default function ScreenshotsScreen() {
 
   async function handleFavorite(asset, uri?: string) {
     const finalUri = uri || uriCacheRef.current[asset.id] || asset.uri;
-    const existing = JSON.parse((await AsyncStorage.getItem('favorites')) || '[]');
+    const existing = await loadFavorites();
     if (!existing.some((f: any) => f.id === asset.id)) {
       existing.push({ id: asset.id, uri: finalUri });
-      await AsyncStorage.setItem('favorites', JSON.stringify(existing));
+      await saveFavorites(existing);
+      setFavorites(existing);
     }
     setCurrentIndex(prev => prev + 1);
+  }
+
+  function unselectDelete(assetId: string) {
+    updateDeleted(deleted.filter(item => item.id !== assetId));
+  }
+
+  async function unselectFavorite(assetId: string) {
+    const updated = favorites.filter(item => item.id !== assetId);
+    setFavorites(updated);
+    await saveFavorites(updated);
   }
 
   function handleUndo() {
     if (currentIndex === 0) return;
     const prevPhoto = photos[currentIndex - 1];
-    setDeleted(prev => prev.filter(d => d.id !== prevPhoto.id));
+    updateDeleted(deleted.filter(item => item.id !== prevPhoto.id));
     setCurrentIndex(prev => prev - 1);
   }
 
@@ -237,11 +248,16 @@ export default function ScreenshotsScreen() {
   }
 
   const current = photos[currentIndex];
+  const currentDeleted = current ? isDeleted(current.id) : false;
+  const currentFavorited = current ? isFavorited(current.id) : false;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerTop}>
-        <Text style={styles.title}>📱 屏幕截图</Text>
+        <View>
+          <Text style={styles.title}>📱 屏幕截图</Text>
+          <Text style={styles.metaText}>{totalCount} 张 · 约 {formatBytes(totalBytes)}</Text>
+        </View>
         <View style={styles.headerRight}>
           <Text style={styles.progress}>
             {Math.min(currentIndex + 1, totalCount)}/{totalCount}
@@ -250,14 +266,38 @@ export default function ScreenshotsScreen() {
             style={[styles.trashBtn, { backgroundColor: deleted.length > 0 ? '#ff3b30' : '#333' }]}
             onPress={async () => {
               if (deleted.length === 0) return;
-              await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
-              router.push('/trash');
+              await savePendingDelete(deleted);
+              router.navigate('/(tabs)/trash');
             }}
           >
             <Text style={styles.trashText}>🗑 {deleted.length}</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {allScreenshots.length > 0 ? (
+        <View style={styles.bulkRow}>
+          <TouchableOpacity
+            style={styles.bulkBtn}
+            onPress={async () => {
+              const merged = [
+                ...deleted,
+                ...allScreenshots
+                  .filter(asset => !deleted.some(item => item.id === asset.id))
+                  .map(asset => ({
+                    id: asset.id,
+                    uri: uriCacheRef.current[asset.id] || asset.uri,
+                  })),
+              ];
+              setDeleted(merged);
+              await savePendingDelete(merged);
+              router.navigate('/(tabs)/trash');
+            }}
+          >
+            <Text style={styles.bulkBtnText}>🗑 全部加入垃圾桶</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {photos.length === 0 ? (
         <View style={styles.center}>
@@ -279,10 +319,28 @@ export default function ScreenshotsScreen() {
             <TouchableOpacity style={[styles.btn, styles.btnUndo]} onPress={handleUndo}>
                 <Text style={styles.btnText}>↩ 返回</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={() => handleDelete(current)}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnDelete, currentDeleted && styles.btnDeleteActive]}
+              onPress={() => {
+                if (currentDeleted) {
+                  unselectDelete(current.id);
+                  return;
+                }
+                handleDelete(current);
+              }}
+            >
                 <Text style={styles.btnText}>🗑 删除</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, { backgroundColor: '#FFD700' }]} onPress={() => handleFavorite(current)}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnFavorite, currentFavorited && styles.btnFavoriteActive]}
+              onPress={() => {
+                if (currentFavorited) {
+                  void unselectFavorite(current.id);
+                  return;
+                }
+                void handleFavorite(current);
+              }}
+            >
                 <Text style={styles.btnText}>⭐ 收藏</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.btnKeep]} onPress={() => handleKeep(current)}>
@@ -300,8 +358,8 @@ export default function ScreenshotsScreen() {
             <TouchableOpacity
               style={styles.confirmBtn}
               onPress={async () => {
-                await AsyncStorage.setItem('pendingDelete', JSON.stringify(deleted));
-                router.push('/trash');
+                await savePendingDelete(deleted);
+                router.navigate('/(tabs)/trash');
               }}
             >
               <Text style={styles.confirmText}>确认删除 ({deleted.length}张)</Text>
@@ -319,9 +377,13 @@ const styles = StyleSheet.create({
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     title: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+    metaText: { color: '#888', fontSize: 13, marginTop: 4 },
     progress: { color: 'white', fontSize: 13, fontWeight: 'bold' },
     trashBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
     trashText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+    bulkRow: { paddingHorizontal: 16, paddingBottom: 8 },
+    bulkBtn: { backgroundColor: '#2A2A2A', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
+    bulkBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
     cardArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     card: { width: SW - 64, height: SH * 0.65, borderRadius: 24, overflow: 'hidden', backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
     cardImage: { width: '100%', height: '100%', resizeMode: 'contain' },
@@ -333,8 +395,11 @@ const styles = StyleSheet.create({
     btnRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, padding: 20 },
     btn: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
     btnDelete: { backgroundColor: '#ff3b30' },
+    btnFavorite: { backgroundColor: '#FFD700' },
     btnKeep: { backgroundColor: '#34c759' },
     btnUndo: { backgroundColor: '#888' },
+    btnDeleteActive: { borderWidth: 3, borderColor: '#ffd5d1', transform: [{ scale: 1.06 }] },
+    btnFavoriteActive: { borderWidth: 3, borderColor: '#fff4c2', transform: [{ scale: 1.06 }] },
     btnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
     doneSubText: { color: '#888', fontSize: 16 },
     emptyText: { color: '#888', fontSize: 16 },

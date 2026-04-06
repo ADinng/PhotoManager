@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Circle, Svg } from 'react-native-svg';
 
+import { getReviewedCountsForGroups } from '@/lib/review-progress';
+import { theme } from '@/lib/theme';
+
 // 圆环进度组件
 function RingProgress({ total, reviewed, size = 56 }: { total: number; reviewed: number; size?: number }) {
   const percent = total === 0 ? 0 : reviewed / total;
@@ -16,11 +19,11 @@ function RingProgress({ total, reviewed, size = 56 }: { total: number; reviewed:
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
       <Svg width={size} height={size}>
         {/* 背景圆环 */}
-        <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#e0e0e0" strokeWidth={5} fill="none" />
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.colors.surfaceMuted} strokeWidth={5} fill="none" />
         {/* 进度圆环 */}
         <Circle
           cx={size / 2} cy={size / 2} r={radius}
-          stroke={percent === 1 ? '#34c759' : '#007AFF'}
+          stroke={percent === 1 ? theme.colors.secondary : theme.colors.accent}
           strokeWidth={5} fill="none"
           strokeDasharray={`${strokeDash} ${circumference}`}
           strokeLinecap="round"
@@ -29,7 +32,7 @@ function RingProgress({ total, reviewed, size = 56 }: { total: number; reviewed:
       </Svg>
       {/* 中间文字 */}
       <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: percent === 1 ? '#34c759' : '#007AFF' }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: percent === 1 ? theme.colors.secondary : theme.colors.accent }}>
           {Math.round(percent * 100)}%
         </Text>
       </View>
@@ -39,86 +42,23 @@ function RingProgress({ total, reviewed, size = 56 }: { total: number; reviewed:
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [grouped, setGrouped] = useState({});
+  const [grouped, setGrouped] = useState<Record<string, MediaLibrary.Asset[]>>({});
   const [loading, setLoading] = useState(false);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
-  const [reviewedData, setReviewedData] = useState<Record<string, number>>({}); // key -> 已整理数量
+  const [reviewedData, setReviewedData] = useState<Record<string, number>>({});
   const loadedRef = useRef(false);
 
-  useEffect(() => {
-    if (permission?.granted && !loadedRef.current) {
-      loadPhotos();
-    }
-  }, [permission]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (permission?.granted && loadedRef.current) {
-        refreshCounts();
-      }
-      // loadReviewedData();
-    }, [permission])
-  );
-
-  // async function loadReviewedData() {
-  //   try {
-  //     const val = await AsyncStorage.getItem('reviewedData');
-  //     const data = val ? JSON.parse(val) : {};
-      
-  //     // 修正超过实际数量的值
-  //     const corrected = {};
-  //     for (const key of Object.keys(data)) {
-  //       const actual = grouped[key]?.length || 0;
-  //       corrected[key] = actual > 0 ? Math.min(data[key], actual) : data[key];
-  //     }
-  //     setReviewedData(corrected);
-  //   } catch {}
-  // }
-
-  async function correctReviewedData(groups: any) {
+  const correctReviewedData = useCallback(async (groups: Record<string, MediaLibrary.Asset[]>) => {
     try {
-      const val = await AsyncStorage.getItem('reviewedData');
-      const data = val ? JSON.parse(val) : {};
-      const corrected = {};
-      for (const key of Object.keys(data)) {
-        const actual = groups[key]?.length || 0;
-        corrected[key] = actual > 0 ? Math.min(data[key], actual) : 0;
-      }
+      const corrected = await getReviewedCountsForGroups(groups);
       setReviewedData(corrected);
     } catch {}
-  }
+  }, []);
 
-  async function loadPhotos() {
-    setLoading(true);
-    loadedRef.current = true;
-    const groups = await fetchAllGrouped();
-    setGrouped(groups);
-    await correctReviewedData(groups);
-    // // 清除旧的reviewedData，重新开始
-    // await AsyncStorage.removeItem('reviewedData');
-    // setReviewedData({});
-
-      // 只清除一次旧数据
-    const cleaned = await AsyncStorage.getItem('dataCleared_v1');
-    if (!cleaned) {
-      await AsyncStorage.removeItem('reviewedData');
-      setReviewedData({});
-      await AsyncStorage.setItem('dataCleared_v1', 'true');
-    }
-
-    setLoading(false);
-  }
-
-  async function refreshCounts() {
-    const groups = await fetchAllGrouped();
-    setGrouped(groups);
-    await correctReviewedData(groups);
-  }
-
-  async function fetchAllGrouped() {
-    let allAssets = [];
+  const fetchAllGrouped = useCallback(async () => {
+    let allAssets: MediaLibrary.Asset[] = [];
     let hasMore = true;
-    let after = null;
+    let after: string | null = null;
     while (hasMore) {
       const result = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
@@ -130,7 +70,8 @@ export default function HomeScreen() {
       hasMore = result.hasNextPage;
       after = result.endCursor;
     }
-    const groups = {};
+
+    const groups: Record<string, MediaLibrary.Asset[]> = {};
     for (const asset of allAssets) {
       const date = new Date(asset.creationTime);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -138,7 +79,42 @@ export default function HomeScreen() {
       groups[key].push(asset);
     }
     return groups;
-  }
+  }, []);
+
+  const loadPhotos = useCallback(async () => {
+    setLoading(true);
+    loadedRef.current = true;
+    const cleaned = await AsyncStorage.getItem('dataCleared_v1');
+    if (!cleaned) {
+      await AsyncStorage.removeItem('reviewedData');
+      await AsyncStorage.setItem('dataCleared_v1', 'true');
+    }
+
+    const groups = await fetchAllGrouped();
+    setGrouped(groups);
+    await correctReviewedData(groups);
+    setLoading(false);
+  }, [correctReviewedData, fetchAllGrouped]);
+
+  const refreshCounts = useCallback(async () => {
+    const groups = await fetchAllGrouped();
+    setGrouped(groups);
+    await correctReviewedData(groups);
+  }, [correctReviewedData, fetchAllGrouped]);
+
+  useEffect(() => {
+    if (permission?.granted && !loadedRef.current) {
+      void loadPhotos();
+    }
+  }, [loadPhotos, permission?.granted]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (permission?.granted && loadedRef.current) {
+        void refreshCounts();
+      }
+    }, [permission?.granted, refreshCounts])
+  );
 
   if (!permission?.granted) {
     return (
@@ -154,13 +130,15 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={theme.colors.accent} />
         <Text style={styles.loadingText}>正在读取图片...</Text>
       </View>
     );
   }
 
-  // 按年分组
+  const totalReviewed = Object.values(reviewedData).reduce((a: number, b: number) => a + b, 0);
+  const totalAssets = Object.values(grouped).reduce((a: number, b) => a + b.length, 0);
+
   const byYear: Record<string, any[]> = {};
   Object.keys(grouped)
     .sort((a, b) => b.localeCompare(a))
@@ -182,26 +160,36 @@ export default function HomeScreen() {
       {/* <Text style={styles.header}>我的照片</Text> */}
       <View style={styles.topBar}>
         <Text style={styles.header}>我的照片</Text>
-        <TouchableOpacity
-          style={styles.favBtn}
-          onPress={() => router.push('/favorites')}
-        >
-          <Text style={styles.favBtnText}>⭐ 收藏</Text>
-        </TouchableOpacity>
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.memoryBtn}
+            onPress={() => router.push({ pathname: '/on-this-day', params: { years: years.join(',') } })}
+          >
+            <Text style={styles.memoryBtnText}>🕰 当年今日</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.randomBtn}
+            onPress={() => router.push('/random')}
+          >
+            <Text style={styles.randomBtnText}>🎲 随机发现</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.favBtn}
+            onPress={() => router.push('/favorites')}
+          >
+            <Text style={styles.favBtnText}>⭐ 收藏</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.totalProgress}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>总进度</Text>
             <Text style={styles.totalCount}>
-              {Object.values(reviewedData).reduce((a: number, b: number) => a + b, 0)} / {Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0)} 张
+              {totalReviewed} / {totalAssets} 张
             </Text>
           </View>
           <View style={styles.progressBarBg}>
             <View style={[styles.progressBarFill, {
-              width: `${Math.min(
-                Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0) === 0 ? 0 :
-                Object.values(reviewedData).reduce((a: number, b: number) => a + b, 0) /
-                Object.values(grouped).reduce((a: number, b: any) => a + b.length, 0) * 100
-              , 100)}%`
+              width: `${Math.min(totalAssets === 0 ? 0 : totalReviewed / totalAssets * 100, 100)}%`
             }]} />
           </View>
         </View>
@@ -236,36 +224,51 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 60 },
+  container: { flex: 1, backgroundColor: theme.colors.background, paddingTop: 56 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 20 },
-  header: { fontSize: 28, fontWeight: 'bold', paddingHorizontal: 20, paddingBottom: 8 },
+  header: { fontSize: 32, fontWeight: 'bold', color: theme.colors.text, paddingBottom: 8 },
   yearBlock: { marginHorizontal: 16, marginBottom: 24 },
-  yearLabel: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 10 },
+  yearLabel: { fontSize: 22, fontWeight: 'bold', color: theme.colors.text, marginBottom: 12 },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   monthCard: {
-    width: '30%', backgroundColor: 'white',
-    borderRadius: 16, padding: 12,
+    width: '31%', backgroundColor: theme.colors.surface,
+    borderRadius: 20, padding: 14,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow,
   },
-  monthCardDone: { backgroundColor: '#e8f5e9' },
-  monthNum: { fontSize: 15, fontWeight: '700', color: '#222', marginTop: 4 },
-  monthNumDone: { color: '#2e7d32' },
-  monthCount: { fontSize: 11, color: '#aaa', marginTop: 2 },
-  monthCountDone: { color: '#66bb6a' },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  button: { backgroundColor: '#007AFF', paddingHorizontal: 30, paddingVertical: 14, borderRadius: 12 },
+  monthCardDone: { backgroundColor: theme.colors.secondarySoft, borderColor: '#C4D6CD' },
+  monthNum: { fontSize: 15, fontWeight: '700', color: theme.colors.text, marginTop: 6 },
+  monthNumDone: { color: theme.colors.secondary },
+  monthCount: { fontSize: 11, color: theme.colors.muted, marginTop: 2 },
+  monthCountDone: { color: theme.colors.secondary },
+  title: { fontSize: 22, fontWeight: 'bold', color: theme.colors.text },
+  button: { backgroundColor: theme.colors.accent, paddingHorizontal: 30, paddingVertical: 14, borderRadius: 14 },
   buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  loadingText: { marginTop: 12, color: '#888', fontSize: 16 },
+  loadingText: { marginTop: 12, color: theme.colors.muted, fontSize: 16 },
 
-  topBar: { paddingHorizontal: 20, paddingBottom: 16 },
-  totalProgress: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginTop: 8, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  topBar: { paddingHorizontal: 20, paddingBottom: 18 },
+  totalProgress: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 24,
+    padding: 18,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadow,
+  },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  totalLabel: { fontSize: 15, fontWeight: '700', color: '#222' },
-  totalCount: { fontSize: 13, color: '#888' },
-  progressBarBg: { height: 8, backgroundColor: '#f0f0f0', borderRadius: 4, overflow: 'hidden' },
-  progressBarFill: { height: 8, backgroundColor: '#007AFF', borderRadius: 4 },
+  totalLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
+  totalCount: { fontSize: 13, color: theme.colors.muted },
+  progressBarBg: { height: 10, backgroundColor: theme.colors.surfaceMuted, borderRadius: 999, overflow: 'hidden' },
+  progressBarFill: { height: 10, backgroundColor: theme.colors.accent, borderRadius: 999 },
 
-  favBtn: { backgroundColor: '#FFF9E6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  favBtnText: { color: '#F5A623', fontWeight: 'bold' },
+  favBtn: { backgroundColor: theme.colors.surface, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border },
+  favBtnText: { color: theme.colors.gold, fontWeight: 'bold' },
+  quickActions: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' },
+  memoryBtn: { backgroundColor: theme.colors.accentSoft, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+  memoryBtnText: { color: theme.colors.accentDeep, fontWeight: 'bold' },
+  randomBtn: { backgroundColor: theme.colors.secondarySoft, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+  randomBtnText: { color: theme.colors.secondary, fontWeight: 'bold' },
 });

@@ -1,13 +1,26 @@
 import { Tabs } from 'expo-router';
+import { Text } from 'react-native';
+
+import { theme } from '@/lib/theme';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#111', borderTopColor: '#222' },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#555',
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+          height: 72,
+          paddingTop: 8,
+          paddingBottom: 10,
+        },
+        tabBarActiveTintColor: theme.colors.accent,
+        tabBarInactiveTintColor: theme.colors.muted,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '700',
+        },
       }}
     >
       <Tabs.Screen
@@ -20,11 +33,15 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="favorites"
-        options={{ title: '收藏', tabBarIcon: ({ color }) => <TabIcon emoji="⭐" color={color} /> }}
+        options={{ title: '收藏', unmountOnBlur: true, tabBarIcon: ({ color }) => <TabIcon emoji="⭐" color={color} /> }}
       />
       <Tabs.Screen
         name="trash"
-        options={{ title: '垃圾桶', tabBarIcon: ({ color }) => <TabIcon emoji="🗑" color={color} /> }}
+        options={{ title: '垃圾桶', unmountOnBlur: true, tabBarIcon: ({ color }) => <TabIcon emoji="🗑" color={color} /> }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{ title: '统计', tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} /> }}
       />
       <Tabs.Screen
         name="similar"
@@ -35,6 +52,5 @@ export default function TabLayout() {
 }
 
 function TabIcon({ emoji, color }: { emoji: string; color: string }) {
-  const { Text } = require('react-native');
-  return <Text style={{ fontSize: 20, opacity: color === '#007AFF' ? 1 : 0.4 }}>{emoji}</Text>;
+  return <Text style={{ fontSize: 20, opacity: color === theme.colors.accent ? 1 : 0.45 }}>{emoji}</Text>;
 }
